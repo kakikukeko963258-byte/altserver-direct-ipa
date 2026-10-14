@@ -218,7 +218,7 @@ inline int PrepareLaunch() {
             auto response = client.request(request).get();
             response.content_ready().get();
             auto payload = response.extract_vector().get();
-            State("auth-connection-http-" + std::to_string(response.status_code()));
+            State(("auth-connection-http-" + std::to_string(response.status_code())).c_str());
             return response.status_code() >= 100 && response.status_code() <= 599 ? 0 : 5;
         } catch (...) { State("auth-connection-failed"); return 4; }
     }
