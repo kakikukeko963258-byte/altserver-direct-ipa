@@ -35,7 +35,7 @@ jobs:
           VCPKG_DISABLE_METRICS: '1'
         run: ./AltServer-Windows/Scripts/build-release.ps1 -OutputDirectory "$env:RUNNER_TEMP/Artifacts"
       - uses: actions/cache/save@v4
-        if: steps.cache.outputs.cache-hit != 'true'
+        if: always() && steps.cache.outputs.cache-hit != 'true'
         with:
           path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
           key: native-x86-v1-${{ hashFiles('AltServer-Windows/vcpkg.json') }}

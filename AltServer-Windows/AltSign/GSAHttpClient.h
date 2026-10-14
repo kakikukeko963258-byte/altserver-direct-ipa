@@ -1,4 +1,5 @@
 #pragma once
+#include <WinSock2.h>
 #include <cpprest/http_client.h>
 #include <curl/curl.h>
 #include <memory>
@@ -95,7 +96,8 @@ public:
             curl_easy_setopt(handle.get(), CURLOPT_FOLLOWLOCATION, 0L);
             curl_easy_setopt(handle.get(), CURLOPT_SSL_VERIFYPEER, 1L);
             curl_easy_setopt(handle.get(), CURLOPT_SSL_VERIFYHOST, 2L);
-            curl_easy_setopt(handle.get(), CURLOPT_CAINFO_BLOB, &root);
+            if (curl_easy_setopt(handle.get(), CURLOPT_CAINFO_BLOB, &root) != CURLE_OK)
+                throw std::runtime_error("Apple's trusted root certificate could not be configured.");
             curl_easy_setopt(handle.get(), CURLOPT_CONNECTTIMEOUT, 20L);
             curl_easy_setopt(handle.get(), CURLOPT_TIMEOUT, 60L);
             curl_easy_setopt(handle.get(), CURLOPT_NOSIGNAL, 1L);
