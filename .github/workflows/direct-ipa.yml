@@ -19,6 +19,7 @@ jobs:
         with:
           path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
           key: native-x86-v1-${{ hashFiles('AltServer-Windows/vcpkg.json') }}
+          restore-keys: native-x86-v1-
       - uses: actions/checkout@v6
         with:
           repository: microsoft/vcpkg

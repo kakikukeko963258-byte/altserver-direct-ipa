@@ -4,6 +4,7 @@
 
 #include "AnisetteData.h"
 #include "AppleSRP.hpp"
+#include "AuthPlist.h"
 
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
@@ -452,7 +453,7 @@ pplx::task<std::pair<std::shared_ptr<Account>, std::shared_ptr<AppleAPISession>>
 				if (npNode == nullptr)
 				{
 					odslog("ERROR: Missing np dictionary.");
-					throw APIError(APIErrorCode::InvalidResponse);
+					throw LocalizedAPIError(static_cast<int>(APIErrorCode::InvalidResponse), "Apple's login response is missing the negotiated protocol proof.");
 				}
 
 				char* npBytes = nullptr;
@@ -497,13 +498,12 @@ pplx::task<std::pair<std::shared_ptr<Account>, std::shared_ptr<AppleAPISession>>
 					throw APIError(APIErrorCode::AuthenticationHandshakeFailed);
 				}
 
-				plist_t decryptedPlist = nullptr;
-				plist_from_xml((const char *)decryptedData->data(), (int)decryptedData->size(), &decryptedPlist);
+				plist_t decryptedPlist = ParseAuthPlist(*decryptedData);
 
 				if (decryptedPlist == nullptr)
 				{
 					odslog("ERROR: Could not parse decrypted login response plist!");
-					throw APIError(APIErrorCode::InvalidResponse);
+					throw LocalizedAPIError(static_cast<int>(APIErrorCode::InvalidResponse), "Apple's decrypted login response does not contain a supported property list.");
 				}
 
 				auto adsidNode = plist_dict_get_item(decryptedPlist, "adsid");
@@ -690,8 +690,7 @@ pplx::task<std::string> AppleAPI::FetchAuthToken(std::map<std::string, plist_t> 
 			throw APIError(APIErrorCode::InvalidResponse);
 		}
 
-		plist_t decryptedTokenPlist = nullptr;
-		plist_from_xml((const char *)decryptedToken->data(), decryptedToken->size(), &decryptedTokenPlist);
+		plist_t decryptedTokenPlist = ParseAuthPlist(*decryptedToken);
 
 		if (decryptedTokenPlist == nullptr)
 		{
@@ -774,22 +773,8 @@ pplx::task<bool> AppleAPI::RequestTrustedDeviceTwoFactorCode(
 					})
 				.then([=](std::vector<unsigned char> compressedData)
 					{
-						std::vector<uint8_t> decompressedData;
-
-						if (compressedData.size() > 2 && compressedData[0] == '<' && compressedData[1] == '?')
-						{
-							// Already decompressed
-							decompressedData = compressedData;
-						}
-						else
-						{
-							decompress((const uint8_t*)compressedData.data(), (size_t)compressedData.size(), decompressedData);
-						}
-
-						std::string decompressedXML = std::string(decompressedData.begin(), decompressedData.end());
-
-						plist_t plist = nullptr;
-						plist_from_xml(decompressedXML.c_str(), (int)decompressedXML.size(), &plist);
+						// The GSA transport has already decoded HTTP compression.
+						plist_t plist = ParseAuthPlist(compressedData);
 
 						if (plist == nullptr)
 						{
@@ -1013,6 +998,8 @@ pplx::task<plist_t> AppleAPI::SendAuthenticationRequest(std::map<std::string, pl
 		.then([=](http_response response)
 			{
 				odslog("Received auth response status code: " << response.status_code());
+				if (response.status_code() != 200)
+					throw LocalizedAPIError(response.status_code(), "Apple authentication service returned HTTP " + std::to_string(response.status_code()) + ".");
 				return response.extract_vector();
 			})
 				.then([=](std::vector<unsigned char> compressedData)
@@ -1021,8 +1008,7 @@ pplx::task<plist_t> AppleAPI::SendAuthenticationRequest(std::map<std::string, pl
 
 						std::string decompressedXML = std::string(decompressedData.begin(), decompressedData.end());
 
-						plist_t plist = nullptr;
-						plist_from_xml(decompressedXML.c_str(), (int)decompressedXML.size(), &plist);
+						plist_t plist = ParseAuthPlist(decompressedData);
 
 						if (plist == nullptr)
 						{

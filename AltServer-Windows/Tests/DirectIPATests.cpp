@@ -46,6 +46,10 @@ inline HINSTANCE hInst;
 constexpr int ID_LOGIN = 1;
 BOOL CALLBACK LoginDlgProc(HWND, UINT, WPARAM, LPARAM);
 #include "../AltServer/DirectIPA.h"
+#include "../AltSign/AuthPlist.h"
+#include "../AltSign/GSAHttpClient.h"
+#include <openssl/pem.h>
+#include <openssl/sha.h>
 
 int main() {
     auto check = [](bool condition, const char* label) {
@@ -63,6 +67,31 @@ int main() {
     HWND sender = nullptr;
     HWND receiver = nullptr;
     try {
+        check(GSAHttpClient::IsSafePath("/grandslam/GsService2"), "allow fixed-host authentication path");
+        check(!GSAHttpClient::IsSafePath("//untrusted.invalid/auth"), "reject alternate host");
+        check(!GSAHttpClient::IsSafePath("https://untrusted.invalid/auth"), "reject absolute URL");
+        check(!GSAHttpClient::IsSafePath("/auth\r\ninjected"), "reject URL header injection");
+        const std::string xml = "<?xml version=\"1.0\"?><plist version=\"1.0\"><dict><key>Response</key><dict><key>Status</key><dict><key>ec</key><integer>0</integer></dict></dict></dict></plist>";
+        auto xmlPlist = ParseAuthPlist(std::vector<unsigned char>(xml.begin(), xml.end()));
+        check(xmlPlist && plist_get_node_type(xmlPlist) == PLIST_DICT, "parse XML authentication fixture");
+        char* binaryBytes = nullptr;
+        uint32_t binaryLength = 0;
+        plist_to_bin(xmlPlist, &binaryBytes, &binaryLength);
+        auto binaryPlist = ParseAuthPlist(std::vector<unsigned char>(binaryBytes, binaryBytes + binaryLength));
+        check(binaryPlist && plist_get_node_type(binaryPlist) == PLIST_DICT, "parse binary authentication fixture");
+        plist_free(binaryPlist); plist_free(xmlPlist); free(binaryBytes);
+        check(ParseAuthPlist({}) == nullptr, "reject empty authentication response");
+        auto pem = BIO_new_mem_buf(AppleRootCAPem, static_cast<int>(sizeof(AppleRootCAPem) - 1));
+        auto root = PEM_read_bio_X509(pem, nullptr, nullptr, nullptr);
+        check(root != nullptr, "parse embedded Apple trust anchor");
+        unsigned char digest[SHA256_DIGEST_LENGTH]{};
+        unsigned int digestLength = 0;
+        check(X509_digest(root, EVP_sha256(), digest, &digestLength) == 1, "hash Apple trust anchor");
+        std::string hex;
+        const char* digits = "0123456789abcdef";
+        for (unsigned int i = 0; i < digestLength; ++i) {hex += digits[digest[i] >> 4]; hex += digits[digest[i] & 15];}
+        check(hex == "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024", "verify official Apple root fingerprint");
+        X509_free(root); BIO_free(pem);
         check(DirectIPA::CandidateDevices({}).empty(), "zero devices");
         auto phone = std::make_shared<Device>(Device::iPhone, "synthetic-one");
         auto duplicate = std::make_shared<Device>(Device::iPhone, "synthetic-one");

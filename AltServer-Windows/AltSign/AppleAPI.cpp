@@ -111,10 +111,6 @@ AppleAPI* AppleAPI::getInstance()
 
 AppleAPI::AppleAPI() : _servicesClient(U("https://developerservices2.apple.com/services/v1")), _client(U("https://developerservices2.apple.com/services/QH65B2")), _gsaClient(U("https://gsa.apple.com"))
 {
-	http_client_config config;
-	config.set_validate_certificates(false);
-
-	_gsaClient = web::http::client::http_client(U("https://gsa.apple.com"), config);
 
 //    volatile long response_counter = 0;
 //    auto response_count_handler =
@@ -1010,7 +1006,7 @@ web::http::client::http_client AppleAPI::client()
     return this->_client;
 }
 
-web::http::client::http_client AppleAPI::gsaClient()
+GSAHttpClient AppleAPI::gsaClient()
 {
 	return this->_gsaClient;
 }

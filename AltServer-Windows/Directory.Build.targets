@@ -10,7 +10,7 @@
     <Link>
       <AdditionalLibraryDirectories>$(VcpkgInstalledDir)x86-windows\lib;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
       <AdditionalDependencies Condition="'$(MSBuildProjectName)' == 'imobiledevice'">libssl.lib;libcrypto.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalDependencies Condition="'$(MSBuildProjectName)' == 'AltServer'">cpprest_2_10.lib;libssl.lib;libcrypto.lib;z.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies Condition="'$(MSBuildProjectName)' == 'AltServer'">cpprest_2_10.lib;libssl.lib;libcrypto.lib;libcurl.lib;z.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
   </ItemDefinitionGroup>
 </Project>

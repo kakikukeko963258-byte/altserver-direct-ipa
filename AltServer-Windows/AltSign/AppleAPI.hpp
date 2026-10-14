@@ -14,6 +14,7 @@
 
 #include <cpprest/http_client.h>
 #include <cpprest/json.h>
+#include "GSAHttpClient.h"
 
 #include "Account.hpp"
 #include "AppID.hpp"
@@ -73,8 +74,8 @@ private:
     web::http::client::http_client _servicesClient;
     web::http::client::http_client servicesClient();
 
-	web::http::client::http_client _gsaClient;
-	web::http::client::http_client gsaClient();
+	GSAHttpClient _gsaClient;
+	GSAHttpClient gsaClient();
 
     web::http::client::http_client _client;
     web::http::client::http_client client();

@@ -73,6 +73,7 @@ try {
         "plist.dll",
         "dnssd.dll",
         "cpprest_2_10.dll",
+        "libcurl.dll",
         "msvcp140.dll",
         "vcruntime140.dll"
     )
