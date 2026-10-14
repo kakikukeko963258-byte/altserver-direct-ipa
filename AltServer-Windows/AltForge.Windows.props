@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <AltForgeWindowsRoot>$(MSBuildThisFileDirectory)</AltForgeWindowsRoot>
+    <VcpkgInstalledDir Condition="'$(VcpkgInstalledDir)' == ''">$(AltForgeWindowsRoot)vcpkg_installed\</VcpkgInstalledDir>
+    <MDNSResponderDir Condition="'$(MDNSResponderDir)' == ''">$(AltForgeWindowsRoot)Dependencies\mDNSResponder\</MDNSResponderDir>
+  </PropertyGroup>
+</Project>
