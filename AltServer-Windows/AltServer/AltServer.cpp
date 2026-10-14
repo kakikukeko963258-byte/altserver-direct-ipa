@@ -679,7 +679,7 @@ BOOL CALLBACK LoginDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam
 				credential->user = appleID;
 				credential->password = password;
 				auto deviceID = _selectedDevice->identifier();
-				auto owner = GetParent(hwnd);
+				auto owner = AltServerApp::instance()->windowHandle();
 				SecureZeroMemory(password, sizeof(password));
 				EndDialog(hwnd, IDOK);
 				task.then([credential, deviceID, owner](pplx::task<std::shared_ptr<Application>> result) {

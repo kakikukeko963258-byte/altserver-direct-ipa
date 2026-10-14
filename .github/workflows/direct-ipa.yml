@@ -41,6 +41,9 @@ jobs:
       - name: Test direct bridge
         shell: pwsh
         run: ./AltServer-Windows/Scripts/test-direct-ipa.ps1
+      - name: Test menu setup and rollback
+        shell: pwsh
+        run: ./AltServer-Windows/Scripts/test-direct-menu.ps1
       - uses: actions/upload-artifact@v4
         with:
           name: AltServer-Direct-IPA-Windows

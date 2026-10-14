@@ -161,7 +161,9 @@ inline std::shared_ptr<Device> SelectDevice(HWND owner) {
         buttons.push_back({1000 + static_cast<int>(i), labels[i].c_str()});
     TASKDIALOGCONFIG config{};
     config.cbSize = sizeof(config);
-    config.hwndParent = owner;
+    // The server's owner is a message-only HWND. Use a desktop dialog so the
+    // device choice is visible and targetable even though the server is hidden.
+    config.hwndParent = nullptr;
     config.dwFlags = TDF_USE_COMMAND_LINKS | TDF_ALLOW_DIALOG_CANCELLATION;
     config.dwCommonButtons = TDCBF_CANCEL_BUTTON;
     config.pszWindowTitle = L"AltServer Direct IPA";
@@ -262,7 +264,7 @@ inline void BeginInstall(HWND window) {
     if (!ReadCredentials(device->identifier(), credential)) {
         loginForDirectIPA = true;
         State("awaiting-apple-id");
-        int result = DialogBoxW(hInst, MAKEINTRESOURCEW(ID_LOGIN), window, LoginDlgProc);
+        int result = DialogBoxW(hInst, MAKEINTRESOURCEW(ID_LOGIN), nullptr, LoginDlgProc);
         loginForDirectIPA = false;
         if (result != IDOK) {
             busy = false;
