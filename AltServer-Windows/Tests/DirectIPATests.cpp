@@ -24,9 +24,12 @@ inline std::string StringFromWideString(std::wstring text) {
 struct Application {};
 struct Device {
     enum Type { iPhone = 2, iPad = 4 };
-    int type() const;
-    std::string identifier() const;
-    std::string name() const;
+    int fixtureType;
+    std::string fixtureID;
+    Device(int kind, std::string id) : fixtureType(kind), fixtureID(id) {}
+    int type() const { return fixtureType; }
+    std::string identifier() const { return fixtureID; }
+    std::string name() const { return "Synthetic device"; }
 };
 struct DeviceManager {
     static DeviceManager* instance();
@@ -60,6 +63,14 @@ int main() {
     HWND sender = nullptr;
     HWND receiver = nullptr;
     try {
+        check(DirectIPA::CandidateDevices({}).empty(), "zero devices");
+        auto phone = std::make_shared<Device>(Device::iPhone, "synthetic-one");
+        auto duplicate = std::make_shared<Device>(Device::iPhone, "synthetic-one");
+        auto tablet = std::make_shared<Device>(Device::iPad, "synthetic-two");
+        auto television = std::make_shared<Device>(8, "synthetic-tv");
+        check(DirectIPA::CandidateDevices({phone}).size() == 1, "one device");
+        check(DirectIPA::CandidateDevices({phone, tablet}).size() == 2, "two devices");
+        check(DirectIPA::CandidateDevices({phone, duplicate, tablet, television, nullptr}).size() == 2, "deduplicate and filter devices");
         std::ofstream(path, std::ios::binary) << "synthetic fixture";
         check(DirectIPA::ValidPath(path.wstring()), "unicode absolute IPA");
         check(!DirectIPA::ValidPath(L"relative.ipa"), "reject relative paths");

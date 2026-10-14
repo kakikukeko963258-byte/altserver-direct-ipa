@@ -7,8 +7,18 @@ jobs:
   windows:
     runs-on: windows-2025
     timeout-minutes: 60
+    env:
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\.vcpkg-binary-cache
     steps:
       - uses: actions/checkout@v6
+      - name: Prepare dependency cache
+        shell: pwsh
+        run: New-Item -ItemType Directory -Path $env:VCPKG_DEFAULT_BINARY_CACHE -Force | Out-Null
+      - uses: actions/cache/restore@v4
+        id: cache
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: native-x86-v1-${{ hashFiles('AltServer-Windows/vcpkg.json') }}
       - uses: actions/checkout@v6
         with:
           repository: microsoft/vcpkg
@@ -23,6 +33,11 @@ jobs:
           VCPKG_ROOT: ${{ github.workspace }}\.vcpkg
           VCPKG_DISABLE_METRICS: '1'
         run: ./AltServer-Windows/Scripts/build-release.ps1 -OutputDirectory "$env:RUNNER_TEMP/Artifacts"
+      - uses: actions/cache/save@v4
+        if: steps.cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
+          key: native-x86-v1-${{ hashFiles('AltServer-Windows/vcpkg.json') }}
       - name: Test direct bridge
         shell: pwsh
         run: ./AltServer-Windows/Scripts/test-direct-ipa.ps1

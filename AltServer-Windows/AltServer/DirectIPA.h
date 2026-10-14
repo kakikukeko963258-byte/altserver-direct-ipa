@@ -126,14 +126,18 @@ inline void ForgetCredentials() {
     Alert(success ? L"保存したApple IDとパスワードを削除しました。" : L"一部の認証情報を削除できませんでした。");
 }
 
-inline std::shared_ptr<Device> SelectDevice(HWND owner) {
-    auto all = DeviceManager::instance()->availableDevices();
+inline std::vector<std::shared_ptr<Device>> CandidateDevices(const std::vector<std::shared_ptr<Device>>& all) {
     std::vector<std::shared_ptr<Device>> devices;
     std::set<std::string> identifiers;
     for (auto& device : all) {
-        if ((device->type() & (Device::iPhone | Device::iPad)) &&
+        if (device && (device->type() & (Device::iPhone | Device::iPad)) &&
             identifiers.insert(device->identifier()).second) devices.push_back(device);
     }
+    return devices;
+}
+
+inline std::shared_ptr<Device> SelectDevice(HWND owner) {
+    auto devices = CandidateDevices(DeviceManager::instance()->availableDevices());
     if (devices.empty()) { Alert(L"接続中のiPhone／iPadが見つかりません。端末を接続し、このPCを信頼してください。"); return nullptr; }
     if (devices.size() == 1) return devices[0];
     std::vector<std::wstring> labels;
