@@ -14,6 +14,7 @@
 #include <optional>
 #include <set>
 #include <cwctype>
+#include "../AltSign/GSAHttpClient.h"
 #pragma comment(lib, "Advapi32.lib")
 #pragma comment(lib, "Shell32.lib")
 #pragma comment(lib, "Comctl32.lib")
@@ -204,6 +205,24 @@ inline int PrepareLaunch() {
     if (!args) return 2;
     std::vector<std::wstring> arguments(args, args + count);
     LocalFree(args);
+    if (count == 2 && arguments[1] == L"--test-auth-connection") {
+        // Uses a fixed invalid payload and no real account/device data. The
+        // expected 401 proves TLS validation and the buffered response path.
+        try {
+            GSAHttpClient client(U("https://gsa.apple.com"));
+            web::http::http_request request(web::http::methods::POST);
+            request.set_request_uri(U("/grandslam/GsService2"));
+            request.set_body(std::string("t"), std::string("text/x-xml-plist"));
+            request.headers().add(U("X-MMe-Client-Info"), U("<MacBookPro15,1> <macOS;13.2;22D49> <com.apple.AuthKitWin/1 (com.apple.iCloud/1)>"));
+            request.headers().add(U("User-Agent"), U("akd/1.0 CFNetwork/978.0.7 Darwin/18.7.0"));
+            auto response = client.request(request).get();
+            response.content_ready().get();
+            auto payload = response.extract_vector().get();
+            bool expected = response.status_code() == 401 && !payload.empty();
+            State(expected ? "auth-connection-ok" : "auth-connection-unexpected-status");
+            return expected ? 0 : 5;
+        } catch (...) { State("auth-connection-failed"); return 4; }
+    }
     if (count == 2 && arguments[1] == L"--forget-credentials") { ForgetCredentials(); return 0; }
     if (count != 1 && (count != 3 || arguments[1] != L"--install")) {
         Alert(L"使用方法: AltServer.exe --install \"IPAの絶対パス\"\n保存情報の削除: --forget-credentials"); return 2;
