@@ -9,7 +9,10 @@ $executable = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot 'AltServer.exe'))
 function Ensure-RegistryKey([string]$key) {
     # Registry New-Item -Force can replace existing keys. Never use it on
     # existing preference or Windows startup keys.
-    if (-not (Test-Path -LiteralPath $key)) { New-Item -Path $key | Out-Null }
+    if (-not $key.StartsWith('HKCU:\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Only per-user registry keys are supported.' }
+    $created = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($key.Substring(6))
+    if (-not $created) { throw 'Could not create registry key.' }
+    $created.Close()
 }
 function Read-RegistryValue([string]$key, [string]$name) {
     if (-not (Test-Path -LiteralPath $key)) { return $null }
@@ -48,6 +51,27 @@ if (-not $configuredFolder -and $stockFolder) {
     }
     if ($complete) {
         New-ItemProperty -LiteralPath $serverSettings -Name AppleFolder -Value $stockFolder -PropertyType String -Force | Out-Null
+    }
+}
+$stockServerID = Read-RegistryValue 'HKCU:\SOFTWARE\RileyTestut\AltServer' 'ServerID'
+if (-not (Read-RegistryValue $serverSettings 'ServerID') -and $stockServerID) {
+    New-ItemProperty -LiteralPath $serverSettings -Name ServerID -Value $stockServerID -PropertyType String -Force | Out-Null
+}
+# Reuse the stock server's encrypted certificate cache locally so switching
+# implementations does not unnecessarily revoke the existing signing certificate.
+# Account information and keys are never included in build output or logs.
+$stockCertificates = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'AltServer\Certificates'
+$modifiedCertificates = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'AltForge\AltServer\Certificates'
+if (Test-Path -LiteralPath $stockCertificates -PathType Container) {
+    $certificates = @(Get-ChildItem -LiteralPath $stockCertificates -Filter '*.p12' -File)
+    if ($certificates.Count) {
+        New-Item -ItemType Directory -Path $modifiedCertificates -Force | Out-Null
+        foreach ($certificate in $certificates) {
+            $destination = Join-Path $modifiedCertificates $certificate.Name
+            if (-not (Test-Path -LiteralPath $destination)) {
+                Copy-Item -LiteralPath $certificate.FullName -Destination $destination
+            }
+        }
     }
 }
 # Replace the stock startup entry, retaining its command for uninstall.

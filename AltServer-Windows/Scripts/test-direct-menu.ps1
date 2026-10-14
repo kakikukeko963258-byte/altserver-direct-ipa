@@ -33,8 +33,11 @@ try {
         New-Item -ItemType Directory -Path (Split-Path -Parent $file) -Force | Out-Null
         Set-Content -LiteralPath $file -Value 'synthetic placeholder; never loaded'
     }
-    New-Item -Path $stockSettings | Out-Null
+    $created = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey($stockSettings.Substring(6))
+    $created.Close()
     New-ItemProperty -LiteralPath $stockSettings -Name AppleFolder -Value $appleFolder -PropertyType String | Out-Null
+    $syntheticServerID = '00000000-0000-0000-0000-000000000001'
+    New-ItemProperty -LiteralPath $stockSettings -Name ServerID -Value $syntheticServerID -PropertyType String | Out-Null
     if (-not (Test-Path -LiteralPath $run)) { New-Item -Path $run | Out-Null }
     New-ItemProperty -LiteralPath $run -Name $sentinel -Value 'preserve existing startup value' -PropertyType String | Out-Null
     New-ItemProperty -LiteralPath $run -Name AltServer -Value $stockCommand -PropertyType String | Out-Null
@@ -43,6 +46,7 @@ try {
     Check ($LASTEXITCODE -eq 0) 'install returns success'
     Check ((Read-Value $run $sentinel) -eq 'preserve existing startup value') 'unrelated startup values survive'
     Check ((Read-Value $serverSettings AppleFolder) -eq $appleFolder) 'migrate portable Apple folder'
+    Check ((Read-Value $serverSettings ServerID) -eq $syntheticServerID) 'migrate server identity'
     Check ((Read-Value $settings StockStartupCommand) -eq $stockCommand) 'backup stock startup'
     Check ($null -eq (Read-Value $run AltServer)) 'disable duplicate stock startup'
     $executable = Join-Path $fixture 'AltServer.exe'
@@ -52,6 +56,7 @@ try {
     Check ($LASTEXITCODE -eq 0) 'repeat install succeeds'
     Check ((Read-Value $settings StockStartupCommand) -eq $stockCommand) 'repeat install preserves backup'
     Check ((Read-Value $serverSettings AppleFolder) -eq $appleFolder) 'repeat install preserves preferences'
+    Check ((Read-Value $serverSettings ServerID) -eq $syntheticServerID) 'repeat install preserves server identity'
     Check ((Read-Value $run $sentinel) -eq 'preserve existing startup value') 'repeat install preserves unrelated startup'
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script -Uninstall
     Check ($LASTEXITCODE -eq 0) 'uninstall succeeds'
