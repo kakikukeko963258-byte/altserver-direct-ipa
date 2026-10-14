@@ -22,6 +22,7 @@ extern "C" {
 #include "CertificateRequest.hpp"
 
 #include "AppleAPI.hpp"
+#include "AuthPlist.h"
 
 #include <cpprest/http_compression.h>
 
@@ -858,30 +859,22 @@ pplx::task<plist_t> AppleAPI::SendRequest(std::string uri,
 		.then([=](http_response response)
 			{
 				odslog("Received response status code: " << response.status_code());
+				if (response.status_code() != 200)
+					throw LocalizedAPIError(response.status_code(), "Apple developer service returned HTTP " + std::to_string(response.status_code()) + ".");
 				return response.extract_vector();
 			})
 				.then([=](std::vector<unsigned char> compressedData)
 					{
-						std::vector<uint8_t> decompressedData;
-
-						if (compressedData.size() > 2 && compressedData[0] == '<' && compressedData[1] == '?')
-						{
-							// Already decompressed
-							decompressedData = compressedData;
+						plist_t plist = ParseAuthPlist(compressedData);
+						if (!plist) {
+							std::vector<uint8_t> decompressedData;
+							if (decompress(compressedData.data(), compressedData.size(), decompressedData))
+								plist = ParseAuthPlist(decompressedData);
 						}
-						else
-						{
-							decompress((const uint8_t*)compressedData.data(), (size_t)compressedData.size(), decompressedData);
-						}
-
-						std::string decompressedXML = std::string(decompressedData.begin(), decompressedData.end());
-
-						plist_t plist = nullptr;
-						plist_from_xml(decompressedXML.c_str(), (int)decompressedXML.size(), &plist);
 
 						if (plist == nullptr)
 						{
-							throw APIError(APIErrorCode::InvalidResponse);
+							throw LocalizedAPIError(static_cast<int>(APIErrorCode::InvalidResponse), "Apple developer service response is not a supported property list.");
 						}
 
 						return plist;

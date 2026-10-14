@@ -304,7 +304,7 @@ pplx::task<std::pair<std::shared_ptr<Account>, std::shared_ptr<AppleAPISession>>
 		auto spNode = plist_dict_get_item(plist, "sp");
 		if (spNode == nullptr)
 		{
-			throw APIError(APIErrorCode::InvalidResponse);
+			throw LocalizedAPIError(static_cast<int>(APIErrorCode::InvalidResponse), "Apple login init response is missing the SRP protocol.");
 		}
 
 		char* sp = nullptr;
@@ -326,7 +326,7 @@ pplx::task<std::pair<std::shared_ptr<Account>, std::shared_ptr<AppleAPISession>>
 
 		if (cNode == nullptr || saltNode == nullptr || iterationsNode == nullptr || bNode == nullptr)
 		{
-			throw APIError(APIErrorCode::InvalidResponse);
+			throw LocalizedAPIError(static_cast<int>(APIErrorCode::InvalidResponse), "Apple login init response is missing challenge fields.");
 		}
 
 		char* c = nullptr;
@@ -406,7 +406,7 @@ pplx::task<std::pair<std::shared_ptr<Account>, std::shared_ptr<AppleAPISession>>
 				if (M2_node == nullptr)
 				{
 					odslog("ERROR: M2 data not found!");
-					throw APIError(APIErrorCode::InvalidResponse);
+					throw LocalizedAPIError(static_cast<int>(APIErrorCode::InvalidResponse), "Apple login complete response is missing the server proof.");
 				}
 
 				char* M2_bytes = nullptr;
@@ -512,7 +512,7 @@ pplx::task<std::pair<std::shared_ptr<Account>, std::shared_ptr<AppleAPISession>>
 				if (adsidNode == nullptr || idmsTokenNode == nullptr)
 				{
 					odslog("ERROR: adsid and /or idmsToken is nil.");
-					throw APIError(APIErrorCode::InvalidResponse);
+					throw LocalizedAPIError(static_cast<int>(APIErrorCode::InvalidResponse), "Apple decrypted login response is missing account or session fields.");
 				}
 
 				char* adsid = nullptr;
@@ -524,7 +524,7 @@ pplx::task<std::pair<std::shared_ptr<Account>, std::shared_ptr<AppleAPISession>>
 				auto statusDictionary = plist_dict_get_item(plist, "Status");
 				if (statusDictionary == nullptr)
 				{
-					throw APIError(APIErrorCode::InvalidResponse);
+					throw LocalizedAPIError(static_cast<int>(APIErrorCode::InvalidResponse), "Apple login complete response is missing authentication status.");
 				}
 
 				std::optional<std::string> authType = std::nullopt;
@@ -578,7 +578,7 @@ pplx::task<std::pair<std::shared_ptr<Account>, std::shared_ptr<AppleAPISession>>
 					if (skNode == nullptr || cNode == nullptr)
 					{
 						odslog("ERROR: No ak and /or c data.");
-						throw APIError(APIErrorCode::InvalidResponse);
+						throw LocalizedAPIError(static_cast<int>(APIErrorCode::InvalidResponse), "Apple decrypted login response is missing token key fields.");
 					}
 
 					char* skBytes = nullptr;
@@ -672,7 +672,7 @@ pplx::task<std::string> AppleAPI::FetchAuthToken(std::map<std::string, plist_t> 
 		auto encryptedTokenNode = plist_dict_get_item(plist, "et");
 		if (encryptedTokenNode == nullptr)
 		{
-			throw APIError(APIErrorCode::InvalidResponse);
+			throw LocalizedAPIError(static_cast<int>(APIErrorCode::InvalidResponse), "Apple app-token response is missing the encrypted token.");
 		}
 
 		char* encryptedTokenBytes = nullptr;
@@ -687,7 +687,7 @@ pplx::task<std::string> AppleAPI::FetchAuthToken(std::map<std::string, plist_t> 
 		if (decryptedToken == ::nullopt)
 		{
 			odslog("ERROR: Failed to decrypt apptoken.");
-			throw APIError(APIErrorCode::InvalidResponse);
+			throw LocalizedAPIError(static_cast<int>(APIErrorCode::InvalidResponse), "Apple app-token response could not be decrypted.");
 		}
 
 		plist_t decryptedTokenPlist = ParseAuthPlist(*decryptedToken);
@@ -695,25 +695,25 @@ pplx::task<std::string> AppleAPI::FetchAuthToken(std::map<std::string, plist_t> 
 		if (decryptedTokenPlist == nullptr)
 		{
 			odslog("ERROR: Could not parse decrypted apptoken plist.");
-			throw APIError(APIErrorCode::InvalidResponse);
+			throw LocalizedAPIError(static_cast<int>(APIErrorCode::InvalidResponse), "Apple decrypted app-token response is not a supported property list.");
 		}
 
 		auto tokensNode = plist_dict_get_item(decryptedTokenPlist, "t");
 		if (tokensNode == nullptr)
 		{
-			throw APIError(APIErrorCode::InvalidResponse);
+			throw LocalizedAPIError(static_cast<int>(APIErrorCode::InvalidResponse), "Apple decrypted app-token response is missing the token collection.");
 		}
 
 		auto tokenDictionary = plist_dict_get_item(tokensNode, app.c_str());
 		if (tokenDictionary == nullptr)
 		{
-			throw APIError(APIErrorCode::InvalidResponse);
+			throw LocalizedAPIError(static_cast<int>(APIErrorCode::InvalidResponse), "Apple decrypted app-token response is missing the requested app.");
 		}
 
 		auto tokenNode = plist_dict_get_item(tokenDictionary, "token");
 		if (tokenNode == nullptr)
 		{
-			throw APIError(APIErrorCode::InvalidResponse);
+			throw LocalizedAPIError(static_cast<int>(APIErrorCode::InvalidResponse), "Apple decrypted app-token response is missing the token value.");
 		}
 
 		char* token = nullptr;
@@ -778,7 +778,7 @@ pplx::task<bool> AppleAPI::RequestTrustedDeviceTwoFactorCode(
 
 						if (plist == nullptr)
 						{
-							throw APIError(APIErrorCode::InvalidResponse);
+							throw LocalizedAPIError(static_cast<int>(APIErrorCode::InvalidResponse), "Apple trusted-device verification response is not a supported property list.");
 						}
 
 						return plist;
@@ -795,7 +795,7 @@ pplx::task<bool> AppleAPI::RequestTrustedDeviceTwoFactorCode(
 
 								if (errorCode != 0)
 								{
-									throw APIError(APIErrorCode::InvalidResponse);
+									throw LocalizedAPIError(static_cast<int>(APIErrorCode::InvalidResponse), "Apple trusted-device verification returned a nonzero result.");
 								}
 							}
 
@@ -923,7 +923,7 @@ pplx::task<std::shared_ptr<Account>> AppleAPI::FetchAccount(std::shared_ptr<Appl
 					auto node = plist_dict_get_item(plist, "developer");
 					if (node == nullptr)
 					{
-						throw APIError(APIErrorCode::InvalidResponse);
+						throw LocalizedAPIError(static_cast<int>(APIErrorCode::InvalidResponse), "Apple developer-account response is missing the developer record.");
 					}
 
 					auto account = make_shared<Account>(node);
@@ -1012,7 +1012,7 @@ pplx::task<plist_t> AppleAPI::SendAuthenticationRequest(std::map<std::string, pl
 
 						if (plist == nullptr)
 						{
-							throw APIError(APIErrorCode::InvalidResponse);
+							throw LocalizedAPIError(static_cast<int>(APIErrorCode::InvalidResponse), "Apple GSA HTTP response is not a supported property list.");
 						}
 
 						return plist;
@@ -1022,13 +1022,13 @@ pplx::task<plist_t> AppleAPI::SendAuthenticationRequest(std::map<std::string, pl
 				auto dictionary = plist_dict_get_item(plist, "Response");
 				if (dictionary == NULL)
 				{
-					throw APIError(APIErrorCode::InvalidResponse);
+					throw LocalizedAPIError(static_cast<int>(APIErrorCode::InvalidResponse), "Apple GSA response is missing the Response dictionary.");
 				}
 
 				auto statusNode = plist_dict_get_item(dictionary, "Status");
 				if (statusNode == NULL)
 				{
-					throw APIError(APIErrorCode::InvalidResponse);
+					throw LocalizedAPIError(static_cast<int>(APIErrorCode::InvalidResponse), "Apple GSA response is missing the Status dictionary.");
 				}
 
 				auto node = plist_dict_get_item(statusNode, "ec");
@@ -1078,7 +1078,7 @@ pplx::task<plist_t> AppleAPI::SendAuthenticationRequest(std::map<std::string, pl
 					auto descriptionNode = plist_dict_get_item(statusNode, "em");
 					if (descriptionNode == nullptr)
 					{
-						throw APIError(APIErrorCode::InvalidResponse);
+						throw LocalizedAPIError(static_cast<int>(APIErrorCode::InvalidResponse), "Apple GSA error response is missing the error description.");
 					}
 
 					char* errorDescription = nullptr;
@@ -1086,7 +1086,7 @@ pplx::task<plist_t> AppleAPI::SendAuthenticationRequest(std::map<std::string, pl
 
 					if (errorDescription == nullptr)
 					{
-						throw APIError(APIErrorCode::InvalidResponse);
+						throw LocalizedAPIError(static_cast<int>(APIErrorCode::InvalidResponse), "Apple GSA error description is not a string.");
 					}
 
 					std::stringstream ss;
