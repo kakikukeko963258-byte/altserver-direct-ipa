@@ -218,7 +218,9 @@ int CALLBACK WinMain(
 	ShowWindow(hWnd, nCmdShow);
 	UpdateWindow(hWnd);
 
+	DirectIPA::State("initializing-apple-libraries");
 	AltServerApp::instance()->Start(hWnd, hInst);
+	DirectIPA::State("ready");
 	if (DirectIPA::pending) PostMessageW(hWnd, DirectIPA::InstallMessage, 0, 0);
 
 	// Main message loop:
@@ -328,6 +330,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		return 0;
 	case DirectIPA::CompleteMessage:
 		DirectIPA::busy = false;
+		DirectIPA::State(wParam ? "succeeded" : "failed");
 		return 0;
 	case (WM_MENUSELECT):
 	{
@@ -671,6 +674,7 @@ BOOL CALLBACK LoginDlgProc(HWND hwnd, UINT Message, WPARAM wParam, LPARAM lParam
 
 			auto task = AltServerApp::instance()->InstallApplication(_ipaFilepath, _selectedDevice, StringFromWideString(appleID), StringFromWideString(password));
 			if (DirectIPA::loginForDirectIPA) {
+				DirectIPA::State("installing");
 				auto credential = std::make_shared<DirectIPA::Credentials>();
 				credential->user = appleID;
 				credential->password = password;

@@ -2022,11 +2022,13 @@ void AltServerApp::setAutomaticallyLaunchAtLogin(bool launch)
 
 	if (launch)
 	{
-		char executablePath[MAX_PATH + 1];
-		GetModuleFileNameA(NULL, executablePath, MAX_PATH + 1);
-
-		int length = strlen((const char*)executablePath);
-		result = RegSetValueExA(hKey, "AltForge Server", 0, REG_SZ, (const BYTE*)executablePath, length + 1); // Must include NULL-character in size.
+		wchar_t executablePath[32768] = {};
+		DWORD length = GetModuleFileNameW(NULL, executablePath, 32768);
+		if (length && length < 32768) {
+			std::wstring command = L"\"" + std::wstring(executablePath) + L"\"";
+			result = RegSetValueExW(hKey, L"AltForge Server", 0, REG_SZ,
+				reinterpret_cast<const BYTE*>(command.c_str()), static_cast<DWORD>((command.size() + 1) * sizeof(wchar_t)));
+		}
 		RegDeleteValueA(hKey, "AltForge AltServer");
 	}
 	else

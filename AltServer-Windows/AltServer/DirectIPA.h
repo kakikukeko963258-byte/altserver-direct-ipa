@@ -6,6 +6,8 @@
 #include <wincred.h>
 #include <sddl.h>
 #include <shellapi.h>
+#include <shlobj.h>
+#include <fstream>
 #include <filesystem>
 #include <vector>
 #include <string>
@@ -25,6 +27,17 @@ inline bool loginForDirectIPA = false;
 inline std::optional<std::wstring> pending;
 inline std::wstring endpoint;
 inline HANDLE singletonMutex = nullptr;
+
+inline void State(const char* stage) {
+    // Local diagnostic state contains only fixed stage names, no account,
+    // device, IPA path or Apple response data.
+    wchar_t folder[MAX_PATH]{};
+    if (FAILED(SHGetFolderPathW(nullptr, CSIDL_LOCAL_APPDATA, nullptr, 0, folder))) return;
+    auto directory = std::filesystem::path(folder) / L"AltServerDirectIPA";
+    std::error_code error;
+    std::filesystem::create_directories(directory, error);
+    if (!error) std::ofstream(directory / L"state.txt", std::ios::trunc) << stage;
+}
 
 inline void Alert(const wchar_t* message) {
     MessageBoxW(nullptr, message, L"AltServer Direct IPA", MB_OK | MB_ICONINFORMATION);
@@ -237,6 +250,7 @@ inline int PrepareLaunch() {
 inline void BeginInstall(HWND window) {
     if (busy || !pending) return;
     busy = true;
+    State("discovering-devices");
     auto path = *pending;
     pending.reset();
     if (!ValidPath(path)) { Alert(L"IPAファイルが移動または削除されました。"); busy = false; return; }
@@ -247,13 +261,19 @@ inline void BeginInstall(HWND window) {
     Credentials credential;
     if (!ReadCredentials(device->identifier(), credential)) {
         loginForDirectIPA = true;
+        State("awaiting-apple-id");
         int result = DialogBoxW(hInst, MAKEINTRESOURCEW(ID_LOGIN), window, LoginDlgProc);
         loginForDirectIPA = false;
-        if (result != IDOK) busy = false;
+        if (result != IDOK) {
+            busy = false;
+            State(result == -1 ? "login-dialog-failed" : "cancelled");
+            if (result == -1) Alert(L"Apple IDの入力画面を開けませんでした。");
+        }
         return;
     }
     // The task may ask for 2FA using AltServer's existing dialog. Do not block
     // the UI message loop while that dialog or signing is in progress.
+    State("installing");
     auto task = AltServerApp::instance()->InstallApplication(_ipaFilepath, device,
         StringFromWideString(credential.user), StringFromWideString(credential.password));
     task.then([window](pplx::task<std::shared_ptr<Application>> result) {

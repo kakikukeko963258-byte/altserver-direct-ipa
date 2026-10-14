@@ -131,14 +131,9 @@ AnisetteDataManager::~AnisetteDataManager()
 
 bool AnisetteDataManager::LoadiCloudDependencies()
 {
-	wchar_t* programFilesCommonDirectory;
-	SHGetKnownFolderPath(FOLDERID_ProgramFilesCommon, 0, NULL, &programFilesCommonDirectory);
-
-	fs::path appleDirectoryPath(programFilesCommonDirectory);
-	appleDirectoryPath.append("Apple");
-
-	fs::path internetServicesDirectoryPath(appleDirectoryPath);
-	internetServicesDirectoryPath.append("Internet Services");
+	// Honor the same configured Apple folder as LoadDependencies, including
+	// the portable dependency folder already selected in stock AltServer.
+	fs::path internetServicesDirectoryPath(AltServerApp::instance()->internetServicesFolderPath());
 
 	fs::path iCloudMainPath(internetServicesDirectoryPath);
 	iCloudMainPath.append("iCloud_main.dll");
