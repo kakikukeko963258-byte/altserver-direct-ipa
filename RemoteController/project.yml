@@ -1,0 +1,34 @@
+name: AltForgeRemote
+options:
+  bundleIdPrefix: com.altforge
+  deploymentTarget:
+    iOS: '26.0'
+targets:
+  AltForgeRemote:
+    type: application
+    platform: iOS
+    sources: [Sources]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.altforge.remotecontroller
+        PRODUCT_NAME: AltForgeRemote
+        SWIFT_VERSION: '5.0'
+        TARGETED_DEVICE_FAMILY: '1,2'
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: AltForge Remote
+        INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.utilities
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        INFOPLIST_KEY_NSLocalNetworkUsageDescription: VPN経由で自分のPCに接続し、アプリのインストールを依頼します。
+        INFOPLIST_KEY_UIFileSharingEnabled: YES
+        INFOPLIST_KEY_LSSupportsOpeningDocumentsInPlace: YES
+    info:
+      path: Info.plist
+      properties:
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+schemes:
+  AltForgeRemote:
+    build:
+      targets:
+        AltForgeRemote: all

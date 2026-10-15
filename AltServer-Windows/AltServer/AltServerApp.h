@@ -49,7 +49,7 @@ public:
 	void Stop();
 	void CheckForUpdates();
 
-	pplx::task<std::shared_ptr<Application>> InstallApplication(std::optional<std::string> filepath, std::shared_ptr<Device> device, std::string appleID, std::string password);
+	pplx::task<std::shared_ptr<Application>> InstallApplication(std::optional<std::string> filepath, std::shared_ptr<Device> device, std::string appleID, std::string password, bool remote = false);
 	pplx::task<void> PrepareDevice(std::shared_ptr<Device> device);
 	pplx::task<void> EnableJIT(InstalledApp app, std::shared_ptr<Device> device);
 
@@ -88,7 +88,7 @@ private:
 
 	static AltServerApp *_instance;
 
-	pplx::task<std::shared_ptr<Application>> _InstallApplication(std::optional<std::string> filepath, std::shared_ptr<Device> installDevice, std::string appleID, std::string password);
+	pplx::task<std::shared_ptr<Application>> _InstallApplication(std::optional<std::string> filepath, std::shared_ptr<Device> installDevice, std::string appleID, std::string password, bool remote = false);
 
 	bool CheckDependencies();
 	bool CheckiCloudDependencies();
@@ -143,5 +143,5 @@ private:
 		std::shared_ptr<Device> device,
 		std::shared_ptr<Team> team,
 		std::shared_ptr<Certificate> certificate,
-		std::map<std::string, std::shared_ptr<ProvisioningProfile>> profiles);
+		std::map<std::string, std::shared_ptr<ProvisioningProfile>> profiles, bool remote);
 };

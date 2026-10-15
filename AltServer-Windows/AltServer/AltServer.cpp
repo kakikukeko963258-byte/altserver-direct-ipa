@@ -326,12 +326,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		catch (...) {
 			DirectIPA::busy = false;
 			DirectIPA::loginForDirectIPA = false;
+            DirectIPA::State("failed");
+            if (DirectIPA::remoteRequest) { DirectIPA::remoteRequest = false; break; }
 			DirectIPA::Alert(L"インストールを開始できませんでした。接続とIPAファイルを確認してください。");
 		}
 		return 0;
 	case DirectIPA::CompleteMessage:
 		DirectIPA::busy = false;
 		DirectIPA::State(wParam ? "succeeded" : "failed");
+        DirectIPA::remoteRequest = false;
 		return 0;
 	case (WM_MENUSELECT):
 	{

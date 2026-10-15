@@ -7,6 +7,7 @@
 //
 
 #include "AltServerApp.h"
+#include "RemoteIPA.h"
 #include <windows.h>
 #include <windowsx.h>
 #include <strsafe.h>
@@ -487,12 +488,12 @@ void AltServerApp::CheckForUpdates()
 	ShellExecuteW(NULL, L"open", L"https://github.com/legeling/AltForge/releases/latest", NULL, NULL, SW_SHOWNORMAL);
 }
 
-pplx::task<std::shared_ptr<Application>> AltServerApp::InstallApplication(std::optional<std::string> filepath, std::shared_ptr<Device> installDevice, std::string appleID, std::string password)
+pplx::task<std::shared_ptr<Application>> AltServerApp::InstallApplication(std::optional<std::string> filepath, std::shared_ptr<Device> installDevice, std::string appleID, std::string password, bool remote)
 {
     auto appName = filepath.has_value() ? fs::path(*filepath).filename().string() : "AltForge";
     auto localizedFailure = "Could not install " + appName + " to " + installDevice->name() + ".";
 
-	return this->_InstallApplication(filepath, installDevice, appleID, password)
+	return this->_InstallApplication(filepath, installDevice, appleID, password, remote)
 	.then([=](pplx::task<std::shared_ptr<Application>> task) -> pplx::task<std::shared_ptr<Application>> {
 		try
 		{
@@ -516,7 +517,7 @@ pplx::task<std::shared_ptr<Application>> AltServerApp::InstallApplication(std::o
 				// 10-11 seconds appears to be too short, so wait for 12 seconds instead.
 				Sleep(12000);
 
-				return this->_InstallApplication(filepath, installDevice, appleID, password);
+				return this->_InstallApplication(filepath, installDevice, appleID, password, remote);
 			}
 			else
 			{
@@ -538,9 +539,11 @@ pplx::task<std::shared_ptr<Application>> AltServerApp::InstallApplication(std::o
 		}
 		catch (InstallError& error)
 		{
+            if (remote) throw;
 			if ((InstallErrorCode)error.code() == InstallErrorCode::Cancelled)
 			{
-				// Ignore
+				// Cancellation is a failure to complete, never success.
+                throw;
 			}
 			else
 			{
@@ -550,6 +553,7 @@ pplx::task<std::shared_ptr<Application>> AltServerApp::InstallApplication(std::o
 		}
 		catch (APIError& error)
 		{
+            if (remote) throw;
 			if ((APIErrorCode)error.code() == APIErrorCode::InvalidAnisetteData)
 			{
 				AnisetteDataManager::instance()->ResetProvisioning();
@@ -560,18 +564,20 @@ pplx::task<std::shared_ptr<Application>> AltServerApp::InstallApplication(std::o
 		}
 		catch (AnisetteError& error)
 		{
+            if (remote) throw;
 			this->HandleAnisetteError(error);
             throw;
 		}
 		catch (std::exception& exception)
 		{
+            if (remote) throw;
             this->ShowErrorAlert(exception, localizedFailure);
             throw;
 		}
 	});
 }
 
-pplx::task<std::shared_ptr<Application>> AltServerApp::_InstallApplication(std::optional<std::string> filepath, std::shared_ptr<Device> installDevice, std::string appleID, std::string password)
+pplx::task<std::shared_ptr<Application>> AltServerApp::_InstallApplication(std::optional<std::string> filepath, std::shared_ptr<Device> installDevice, std::string appleID, std::string password, bool remote)
 {
     fs::path destinationDirectoryPath(temporary_directory());
     destinationDirectoryPath.append(make_uuid());
@@ -587,6 +593,7 @@ pplx::task<std::shared_ptr<Application>> AltServerApp::_InstallApplication(std::
 	auto session = std::make_shared<AppleAPISession>();
 
 	return pplx::create_task([=]() {
+		if (remote) RemoteIPA::Verify(installDevice);
 		auto anisetteData = AnisetteDataManager::instance()->FetchAnisetteData();
 		return this->Authenticate(appleID, password, anisetteData);
 	})
@@ -621,7 +628,7 @@ pplx::task<std::shared_ptr<Application>> AltServerApp::_InstallApplication(std::
 				*certificate = *tempCertificate;
 
 				odslog("Preparing device...");
-                return this->PrepareDevice(device).then([=](pplx::task<void> task) {
+                return (remote ? pplx::task_from_result() : this->PrepareDevice(device)).then([=](pplx::task<void> task) {
                     try
                     {
                         // Don't rethrow error, and instead continue installing app even if we couldn't install Developer disk image.
@@ -691,7 +698,7 @@ pplx::task<std::shared_ptr<Application>> AltServerApp::_InstallApplication(std::
           })
     .then([=](std::map<std::string, std::shared_ptr<ProvisioningProfile>> profiles)
           {
-              return this->InstallApp(app, device, team, certificate, profiles);
+              return this->InstallApp(app, device, team, certificate, profiles, remote);
           })
     .then([=](pplx::task<std::shared_ptr<Application>> task)
           {
@@ -1525,7 +1532,7 @@ pplx::task<std::shared_ptr<Application>> AltServerApp::InstallApp(std::shared_pt
                             std::shared_ptr<Device> device,
                             std::shared_ptr<Team> team,
                             std::shared_ptr<Certificate> certificate,
-                            std::map<std::string, std::shared_ptr<ProvisioningProfile>> profilesByBundleID)
+                            std::map<std::string, std::shared_ptr<ProvisioningProfile>> profilesByBundleID, bool remote)
 {
 	auto prepareInfoPlist = [profilesByBundleID](std::shared_ptr<Application> app, plist_t additionalValues){
 		auto profile = profilesByBundleID.at(app->bundleIdentifier());
@@ -1661,6 +1668,11 @@ pplx::task<std::shared_ptr<Application>> AltServerApp::InstallApp(std::shared_pt
 		{
 			activeProfiles = profileIdentifiers;
 		}
+
+		if (remote) {
+            RemoteIPA::Install(app->path(), device);
+            return pplx::task_from_result(app);
+        }
 
 		return DeviceManager::instance()->InstallApp(app->path(), device->identifier(), activeProfiles, [](double progress) {
 			odslog("Installation Progress: " << progress);

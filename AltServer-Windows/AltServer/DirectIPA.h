@@ -15,15 +15,18 @@
 #include <set>
 #include <cwctype>
 #include "../AltSign/GSAHttpClient.h"
+#include "RemoteIPA.h"
 #pragma comment(lib, "Advapi32.lib")
 #pragma comment(lib, "Shell32.lib")
 #pragma comment(lib, "Comctl32.lib")
 
 namespace DirectIPA {
+constexpr ULONG_PTR RemoteProtocol = 0x49504132;
 constexpr ULONG_PTR Protocol = 0x49504131; // IPA1
 constexpr UINT InstallMessage = WM_APP + 81;
 constexpr UINT CompleteMessage = WM_APP + 82;
 inline bool busy = false;
+inline bool remoteRequest = false;
 inline bool loginForDirectIPA = false;
 inline std::optional<std::wstring> pending;
 inline std::wstring endpoint;
@@ -37,7 +40,10 @@ inline void State(const char* stage) {
     auto directory = std::filesystem::path(folder) / L"AltServerDirectIPA";
     std::error_code error;
     std::filesystem::create_directories(directory, error);
-    if (!error) std::ofstream(directory / L"state.txt", std::ios::trunc) << stage;
+    if (!error) {
+        std::ofstream(directory / L"state.txt", std::ios::trunc) << stage;
+        if (remoteRequest) std::ofstream(directory / L"Remote" / L"state.txt", std::ios::trunc) << stage;
+    }
 }
 
 inline void Alert(const wchar_t* message) {
@@ -186,13 +192,15 @@ inline bool AcceptRequest(HWND window, WPARAM sender, LPARAM payload) {
     GetWindowThreadProcessId(reinterpret_cast<HWND>(sender), &processID);
     if (!processID || UserSID(processID) != UserSID(GetCurrentProcessId())) return false;
     auto data = reinterpret_cast<COPYDATASTRUCT*>(payload);
-    if (!data || data->dwData != Protocol || !data->lpData || data->cbData < 4 ||
+    if (!data || (data->dwData != Protocol && data->dwData != RemoteProtocol) || !data->lpData || data->cbData < 4 ||
         data->cbData > 65522 || data->cbData % sizeof(wchar_t)) return false;
     auto text = static_cast<const wchar_t*>(data->lpData);
     auto length = data->cbData / sizeof(wchar_t);
     if (text[length - 1] != L'\0') return false;
     std::wstring path(text, length - 1);
     if (!ValidPath(path)) return false;
+    remoteRequest = data->dwData == RemoteProtocol;
+    if (remoteRequest) State("remote-queued");
     pending = path;
     if (!PostMessageW(window, InstallMessage, 0, 0)) { pending.reset(); return false; }
     return true;
@@ -223,10 +231,12 @@ inline int PrepareLaunch() {
         } catch (...) { State("auth-connection-failed"); return 4; }
     }
     if (count == 2 && arguments[1] == L"--forget-credentials") { ForgetCredentials(); return 0; }
-    if (count != 1 && (count != 3 || arguments[1] != L"--install")) {
+    bool remote = count == 3 && arguments[1] == L"--install-remote";
+    if (count != 1 && (count != 3 || (arguments[1] != L"--install" && !remote))) {
         Alert(L"使用方法: AltServer.exe --install \"IPAの絶対パス\"\n保存情報の削除: --forget-credentials"); return 2;
     }
     if (count == 3 && !ValidPath(arguments[2])) {
+        if (remote) return 2;
         Alert(L"IPAファイルを読み取れません。ローカルにある有効なIPAファイルを指定してください。"); return 2;
     }
     auto sid = UserSID(GetCurrentProcessId());
@@ -243,18 +253,22 @@ inline int PrepareLaunch() {
         }
         CloseHandle(singletonMutex);
         singletonMutex = nullptr;
-        if (!existing) { Alert(L"AltServerの起動中です。少し待ってからもう一度実行してください。"); return 3; }
+        if (!existing) { if (remote) return 3; Alert(L"AltServerの起動中です。少し待ってからもう一度実行してください。"); return 3; }
         if (count == 1) return 0;
         HWND sender = CreateWindowExW(0, L"STATIC", L"AltServerDirectIPA.Sender", 0,
             0, 0, 0, 0, HWND_MESSAGE, nullptr, GetModuleHandleW(nullptr), nullptr);
         if (!sender) return 2;
-        COPYDATASTRUCT data{Protocol, static_cast<DWORD>((arguments[2].size() + 1) * sizeof(wchar_t)), arguments[2].data()};
+        COPYDATASTRUCT data{remote ? RemoteProtocol : Protocol, static_cast<DWORD>((arguments[2].size() + 1) * sizeof(wchar_t)), arguments[2].data()};
         DWORD_PTR accepted = 0;
         auto sent = SendMessageTimeoutW(existing, WM_COPYDATA, reinterpret_cast<WPARAM>(sender),
             reinterpret_cast<LPARAM>(&data), SMTO_ABORTIFHUNG | SMTO_BLOCK, 5000, &accepted);
         DestroyWindow(sender);
-        if (!sent || accepted != 1) { Alert(L"AltServerが処理中か、要求を受け取れませんでした。処理の完了後にもう一度実行してください。"); return 3; }
+        if (!sent || accepted != 1) { if (remote) return 3; Alert(L"AltServerが処理中か、要求を受け取れませんでした。処理の完了後にもう一度実行してください。"); return 3; }
         return 0;
+    }
+    if (remote) {
+        ReleaseMutex(singletonMutex); CloseHandle(singletonMutex); singletonMutex = nullptr;
+        return 3; // Remote requests require an already running native server.
     }
     if (FindWindowExW(HWND_MESSAGE, nullptr, L"DesktopApp", nullptr)) {
         Alert(L"既存のAltServerを終了してから改造版を起動してください。");
@@ -274,12 +288,13 @@ inline void BeginInstall(HWND window) {
     auto path = *pending;
     pending.reset();
     if (!ValidPath(path)) { Alert(L"IPAファイルが移動または削除されました。"); busy = false; return; }
-    auto device = SelectDevice(window);
+    auto device = remoteRequest ? RemoteIPA::RegisteredDevice() : SelectDevice(window);
     if (!device) { busy = false; return; }
     _selectedDevice = device;
     _ipaFilepath = StringFromWideString(path);
     Credentials credential;
     if (!ReadCredentials(device->identifier(), credential)) {
+        if (remoteRequest) { State("failed"); busy = false; remoteRequest = false; return; }
         loginForDirectIPA = true;
         State("awaiting-apple-id");
         int result = DialogBoxW(hInst, MAKEINTRESOURCEW(ID_LOGIN), nullptr, LoginDlgProc);
@@ -295,10 +310,10 @@ inline void BeginInstall(HWND window) {
     // the UI message loop while that dialog or signing is in progress.
     State("installing");
     auto task = AltServerApp::instance()->InstallApplication(_ipaFilepath, device,
-        StringFromWideString(credential.user), StringFromWideString(credential.password));
+        StringFromWideString(credential.user), StringFromWideString(credential.password), remoteRequest);
     task.then([window](pplx::task<std::shared_ptr<Application>> result) {
         bool success = false;
-        try { result.get(); success = true; } catch (...) { /* AltServer already presents the error. */ }
+        try { success = result.get() != nullptr; } catch (...) { /* AltServer already presents the error. */ }
         PostMessageW(window, CompleteMessage, success ? 1 : 0, 0);
     });
 }

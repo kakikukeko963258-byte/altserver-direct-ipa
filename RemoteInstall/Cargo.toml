@@ -1,0 +1,26 @@
+[package]
+name = "altforge-remote"
+version = "0.2.0"
+edition = "2024"
+license = "MIT"
+
+[dependencies]
+anyhow = "1"
+axum = "0.8"
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+subtle = "2"
+hex = "0.4"
+openssl = { version = "0.10", features = ["vendored"] }
+idevice = { git = "https://github.com/jkcoxson/idevice", rev = "3854a5df4a5a6dee71ffce4d8befc2ea356a8065", default-features = false, features = ["openssl", "tcp", "usbmuxd", "remote_pairing", "core_device_proxy", "tunnel_tcp_stack", "rsd", "afc", "installation_proxy"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
+tempfile = "3"
+
+[profile.release]
+strip = true

@@ -1,0 +1,56 @@
+name: Build Remote Install Preview
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  worker:
+    runs-on: windows-2025
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: RemoteInstall
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: RemoteInstall
+      - name: Resolve dependencies
+        shell: pwsh
+        run: cargo generate-lockfile
+      - name: Test authenticated portal and secret storage
+        shell: pwsh
+        run: cargo test --locked
+      - name: Build Windows worker
+        shell: pwsh
+        run: cargo build --release --locked
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: AltForge-Remote-Windows-Preview
+          path: |
+            RemoteInstall/target/release/altforge-remote.exe
+            RemoteInstall/Cargo.lock
+          if-no-files-found: error
+  controller:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install project generator
+        run: brew install xcodegen
+      - name: Generate and build unsigned device app
+        working-directory: RemoteController
+        run: |
+          xcodegen generate
+          xcodebuild -project AltForgeRemote.xcodeproj -scheme AltForgeRemote -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/RemoteDerived" CODE_SIGNING_ALLOWED=NO build
+          mkdir -p "$RUNNER_TEMP/RemoteIPA/Payload"
+          cp -R "$RUNNER_TEMP/RemoteDerived/Build/Products/Release-iphoneos/AltForgeRemote.app" "$RUNNER_TEMP/RemoteIPA/Payload/"
+          cd "$RUNNER_TEMP/RemoteIPA"
+          ditto -c -k --keepParent Payload "$RUNNER_TEMP/AltForgeRemote-unsigned.ipa"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AltForge-Remote-iPhone-Preview
+          path: ${{ runner.temp }}/AltForgeRemote-unsigned.ipa
+          if-no-files-found: error

@@ -45,3 +45,6 @@ AltServer-Windows/Dependencies/libimobiledevice-vs/
 AltServer-Windows/Dependencies/mDNSResponder/
 AltServer-Windows/**/*.user
 AltServer-Windows/**/*.suo
+RemoteInstall/target/
+RemoteController/AltForgeRemote.xcodeproj/
+RemoteController/Info.plist
