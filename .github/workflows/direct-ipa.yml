@@ -12,14 +12,23 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Prepare dependency cache
+        id: toolchain
         shell: pwsh
-        run: New-Item -ItemType Directory -Path $env:VCPKG_DEFAULT_BINARY_CACHE -Force | Out-Null
+        run: |
+          New-Item -ItemType Directory -Path $env:VCPKG_DEFAULT_BINARY_CACHE -Force | Out-Null
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+          $vs = & $vswhere -latest -products * -property installationPath | Select-Object -First 1
+          $versions = (Get-ChildItem (Join-Path $vs 'VC/Tools/MSVC') -Directory | Sort-Object Name | ForEach-Object Name) -join '-'
+          if (-not $versions) { throw 'C++ toolchain version missing' }
+          "version=$versions" >> $env:GITHUB_OUTPUT
       - uses: actions/cache/restore@v4
         id: cache
         with:
           path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
-          key: native-x86-v1-${{ hashFiles('AltServer-Windows/vcpkg.json') }}
-          restore-keys: native-x86-v1-
+          key: native-x86-v2-${{ steps.toolchain.outputs.version }}-${{ hashFiles('AltServer-Windows/vcpkg.json') }}
+          restore-keys: |
+            native-x86-v2-${{ steps.toolchain.outputs.version }}-
+            native-x86-v1-
       - uses: actions/checkout@v6
         with:
           repository: microsoft/vcpkg
@@ -38,7 +47,7 @@ jobs:
         if: always() && steps.cache.outputs.cache-hit != 'true'
         with:
           path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
-          key: native-x86-v1-${{ hashFiles('AltServer-Windows/vcpkg.json') }}
+          key: native-x86-v2-${{ steps.toolchain.outputs.version }}-${{ hashFiles('AltServer-Windows/vcpkg.json') }}
       - name: Test direct bridge
         shell: pwsh
         run: ./AltServer-Windows/Scripts/test-direct-ipa.ps1
