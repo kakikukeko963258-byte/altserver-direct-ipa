@@ -1,0 +1,41 @@
+# 外出先からインストールする試作版
+
+PCとiPhoneを同じTailscaleなどのVPNへ接続し、iPhoneのAltForge RemoteでPCにあるIPAを選びます。PCで署名し、登録したiPhoneへVPN経由で直接転送します。受信用アプリにApple IDを入力する必要はありません。
+
+試作版です。ビルド成功と、モバイル通信での実機インストール成功は別々に確認します。実機確認が終わるまでは携帯回線で動作確認済みとは扱いません。
+
+## 初回設定（自宅で）
+
+1. PCとiPhoneへTailscaleを入れ、同じアカウントでログインしてVPNをオンにします。出口ノードの設定は不要です。
+2. リモート対応の改造版AltServer.exeとaltforge-remote.exeを同じappフォルダーに置きます。通常版AltServerは終了してください。
+3. iPhoneの開発者モードを有効にし、USBでPCを信頼します。端末登録時だけ、USBに接続するiPhoneを1台にしてください。
+4. Setup-Remote.ps1にiPhoneとPCのVPN IPv4アドレス、appフォルダーを指定します。アドレスはTailscaleアプリ内で確認できます。ペアリング情報はWindowsユーザー専用のフォルダーに暗号化して保存します。
+5. 両方のVPNをオンにしてTest-Remote.ps1を実行します。登録したiPhoneの照合に成功してから先へ進みます。
+6. AltForgeRemote-unsigned.ipaを、既存の右クリックメニューから同じiPhoneへインストールします。初回のApple ID登録・追加認証はPCで済ませてください。無料アカウントのアプリ枠を1つ使用します。
+7. altforge-remote.exe connectionで作られるiphone-connection.jsonをiPhoneアプリの「設定ファイルを読み込む」で読み込みます。手入力する場合はPCのVPNアドレスと接続キーを入力します。このファイルは秘密情報なので公開・GitHubへの送信はしないでください。設定後は削除してください。
+8. IPAを右クリックし「AltForge: 外出先のiPhone用に用意」で一覧に追加します。または`%LOCALAPPDATA%\AltServerDirectIPA\Remote\ApprovedIPAs`へ許可するIPAだけをコピーします。同名ファイルは自動で上書きしません。サブフォルダーやリンクは対象外です。
+9. Start-Remote.ps1を実行します。PCは起動したまま、Windowsユーザーはサインインしたままにします。PCがスリープすると通信できません。
+
+## 外での操作
+
+iPhoneをモバイル通信にし、VPNを接続してAltForge Remoteを開きます。「接続・状態を確認」を押してから、アプリの「インストール」を押します。完了表示後、ホーム画面でアプリを開いて確認してください。通信が切れた場合は再インストールを連打せず、先に状態を確認します。
+
+## 接続できない場合
+
+VPN自体の接続と、iPhoneのインストール用サービスへの接続は別々に確認します。Tailscaleの一覧に相手が見えるだけではインストール可能とは限りません。Test-Remote.ps1の成功を確認してください。iOSやVPNの組み合わせによって端末サービスへ到達できない場合があります。
+
+ポートはPC側49321/TCP、iPhone側のRPPairing 49152/TCPと認証後に割り当てられるトンネル用ポートを使用します。公開インターネットへのポート開放やTailscale Funnelは使わないでください。PC側サービスは指定したVPNアドレスにだけ待ち受けます。Windowsファイアウォールを無効化しないでください。必要な受信許可はVPNインターフェイス・相手のVPNアドレスに限定します。
+
+通信はVPNの暗号化を前提にしたHTTPです。iPhoneアプリはプライベートIPv4とTailscaleの100.64.0.0/10以外を受け付けず、リダイレクトもしません。VPNに参加させるのは自分で信頼した端末だけにしてください。
+
+## 保存と停止
+
+登録情報は`%LOCALAPPDATA%\AltServerDirectIPA\Remote`に保存します。pairing.binとtoken.binはユーザー単位のWindows DPAPIで暗号化します。iPhoneは接続キーをその端末のキーチェーンに保存します。Apple IDと証明書は既存の改造版の保存先を使います。
+
+停止はaltforge-remote.exeのserveプロセスを終了します。VPNと端末登録を削除する場合は、実行中の処理がないことを確認してからこのアプリ専用フォルダーとiPhoneの登録を削除してください。既存の通常版AltServerの証明書・Apple IDは削除しません。
+
+## 開発と検証
+
+RemoteInstallはWindows用Rustワーカー、RemoteControllerはSwiftUIアプリです。`.github/workflows/remote-install.yml`がWindowsの認証・入力検証・DPAPIテストとビルド、macOS + Xcodeによる未署名IPA生成を行います。改造版本体は既存のdirect-ipa.ymlでビルドします。IPA入力、認証情報、ペアリング情報はCIへ渡しません。
+
+端末通信にはMITライセンスの[jkcoxson/idevice](https://github.com/jkcoxson/idevice)をコミット固定で使用します。端末とのTLS-PSKにはOpenSSLを使用し、TLSのFinished検証を含む認証処理をライブラリに任せます。

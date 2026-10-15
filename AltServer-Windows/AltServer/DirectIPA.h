@@ -213,6 +213,13 @@ inline int PrepareLaunch() {
     if (!args) return 2;
     std::vector<std::wstring> arguments(args, args + count);
     LocalFree(args);
+    if (count == 3 && arguments[1] == L"--queue-remote") {
+        bool copied = false;
+        try { copied = ValidPath(arguments[2]) && RemoteIPA::Queue(arguments[2]); } catch (...) {}
+        Alert(copied ? L"外出先で選べるアプリに追加しました。iPhoneのAltForge Remoteで一覧を更新してください。" :
+            L"追加できませんでした。初回の端末登録が必要です。同名のIPAがある場合は、先に名前を変えてください。");
+        return copied ? 0 : 2;
+    }
     if (count == 2 && arguments[1] == L"--test-auth-connection") {
         // Uses a fixed invalid payload and no real account/device data. The
         // HTTP status proves TLS completed; it does not prove login succeeds.

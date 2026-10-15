@@ -23,15 +23,7 @@ inline std::string StringFromWideString(std::wstring text) {
 }
 // Declarations isolate the direct bridge from Apple's signing operations.
 struct Application {};
-struct Device {
-    enum Type { iPhone = 2, iPad = 4 };
-    int fixtureType;
-    std::string fixtureID;
-    Device(int kind, std::string id) : fixtureType(kind), fixtureID(id) {}
-    int type() const { return fixtureType; }
-    std::string identifier() const { return fixtureID; }
-    std::string name() const { return "Synthetic device"; }
-};
+#include "../AltSign/Device.hpp"
 struct DeviceManager {
     static DeviceManager* instance();
     std::vector<std::shared_ptr<Device>> availableDevices();
@@ -39,7 +31,7 @@ struct DeviceManager {
 struct AltServerApp {
     static AltServerApp* instance();
     pplx::task<std::shared_ptr<Application>> InstallApplication(std::optional<std::string>,
-        std::shared_ptr<Device>, std::string, std::string);
+        std::shared_ptr<Device>, std::string, std::string, bool = false);
 };
 inline std::shared_ptr<Device> _selectedDevice;
 inline std::optional<std::string> _ipaFilepath;
@@ -48,6 +40,7 @@ constexpr int ID_LOGIN = 1;
 BOOL CALLBACK LoginDlgProc(HWND, UINT, WPARAM, LPARAM);
 #include "../AltServer/DirectIPA.h"
 #include "../AltSign/AuthPlist.h"
+#include "../AltSign/ArchiveSafety.h"
 #include "../AltSign/AuthNegotiation.h"
 #include "../AltSign/AppleResponseCompression.h"
 #include "../AltSign/GSAHttpClient.h"
@@ -55,6 +48,7 @@ BOOL CALLBACK LoginDlgProc(HWND, UINT, WPARAM, LPARAM);
 #include <openssl/sha.h>
 // Compile the actual CSR implementation in this isolated test executable.
 #include "../AltSign/Error.cpp"
+#include "../AltSign/Device.cpp"
 #include "../AltSign/CertificateRequest.cpp"
 
 int main() {
@@ -73,6 +67,14 @@ int main() {
     HWND sender = nullptr;
     HWND receiver = nullptr;
     try {
+        check(ArchiveSafety::SafeName("Payload/Phone.app/Info.plist"), "allow normal archive members");
+        check(ArchiveSafety::SafeName("Payload/Phone.app/"), "allow archive directories");
+        for (auto unsafe : {"../escape", "/escape", "Payload/../escape", "Payload\\escape", "C:escape", "Payload/CON.txt", "Payload/file. ", "Payload//file"})
+            check(!ArchiveSafety::SafeName(unsafe), "reject archive traversal and Windows aliases");
+        check(!ArchiveSafety::SafeName(std::string("Payload/a\0b", 11)), "reject embedded archive NUL");
+        check(!ArchiveSafety::SafeSize(50001,1,0) && !ArchiveSafety::SafeSize(1,ArchiveSafety::MaxFile + 1,0) &&
+            !ArchiveSafety::SafeSize(1,2,ArchiveSafety::MaxExpanded - 1), "bound archive expansion");
+        check(RemoteIPA::Quote(L"C:\\space dir\\") == L"\"C:\\space dir\\\\\"", "quote Windows trailing backslash");
         CertificateRequest generatedRequest;
         auto csrBytes = generatedRequest.data();
         auto keyBytes = generatedRequest.privateKey();
@@ -160,10 +162,10 @@ int main() {
         check(hex == "b0b1730ecbc7ff4505142c49f1295e6eda6bcaed7e2c68c5be91b5a11001f024", "verify official Apple root fingerprint");
         X509_free(root); BIO_free(pem);
         check(DirectIPA::CandidateDevices({}).empty(), "zero devices");
-        auto phone = std::make_shared<Device>(Device::iPhone, "synthetic-one");
-        auto duplicate = std::make_shared<Device>(Device::iPhone, "synthetic-one");
-        auto tablet = std::make_shared<Device>(Device::iPad, "synthetic-two");
-        auto television = std::make_shared<Device>(8, "synthetic-tv");
+        auto phone = std::make_shared<Device>("Synthetic phone", "synthetic-one", Device::iPhone);
+        auto duplicate = std::make_shared<Device>("Synthetic phone", "synthetic-one", Device::iPhone);
+        auto tablet = std::make_shared<Device>("Synthetic tablet", "synthetic-two", Device::iPad);
+        auto television = std::make_shared<Device>("Synthetic TV", "synthetic-tv", Device::AppleTV);
         check(DirectIPA::CandidateDevices({phone}).size() == 1, "one device");
         check(DirectIPA::CandidateDevices({phone, tablet}).size() == 2, "two devices");
         check(DirectIPA::CandidateDevices({phone, duplicate, tablet, television, nullptr}).size() == 2, "deduplicate and filter devices");

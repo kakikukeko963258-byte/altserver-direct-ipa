@@ -41,18 +41,7 @@ private final class Client: ObservableObject {
     @Published var working = false
     private let session = URLSession(configuration: .ephemeral, delegate: SessionDelegate(), delegateQueue: nil)
     private func endpoint(_ path: String) throws -> URL {
-        guard let components = URLComponents(string: address), components.scheme == "http",
-              let host = components.host, components.port == 49321,
-              components.user == nil, components.password == nil,
-              components.query == nil, components.fragment == nil,
-              components.path.isEmpty || components.path == "/" else { throw ClientError.address }
-        let bytes = host.split(separator: ".").compactMap { UInt8($0) }
-        guard bytes.count == 4,
-              bytes[0] == 10 || (bytes[0] == 172 && (16...31).contains(bytes[1])) ||
-                (bytes[0] == 192 && bytes[1] == 168) || (bytes[0] == 100 && (64...127).contains(bytes[1])),
-              token.count == 64, token.allSatisfy({ $0.isHexDigit && $0.isASCII }),
-              let url = URL(string: "http://\(host):49321\(path)") else { throw ClientError.address }
-        return url
+        try remoteEndpoint(address: address, token: token, path: path)
     }
     private func request<T: Decodable>(_ path: String, body: Data? = nil, key: UInt64? = nil) async throws -> T {
         var req = URLRequest(url: try endpoint(path))

@@ -10,6 +10,8 @@
 #include <fstream>
 
 #include "Archiver.hpp"
+#include "ArchiveSafety.h"
+#include <windows.h>
 #include "Error.hpp"
 
 extern "C" {
@@ -94,11 +96,13 @@ void UnzipArchive(std::string archivePath, std::string outputDirectory)
 	}
 
 	char buffer[ALTReadBufferSize];
+    uint64_t expandedBytes = 0;
+    if (zipInfo.number_entry > ArchiveSafety::MaxEntries) { finish(); throw CocoaError(CocoaErrorCode::FileReadCorruptFile); }
 
 	for (int i = 0; i < zipInfo.number_entry; i++)
 	{
 		unz_file_info info;
-		char cFilename[ALTMaxFilenameLength];
+		char cFilename[ALTMaxFilenameLength]{};
 
 		if (unzGetCurrentFileInfo(zipFile, &info, cFilename, ALTMaxFilenameLength, NULL, 0, NULL, 0) != UNZ_OK)
 		{
@@ -106,7 +110,15 @@ void UnzipArchive(std::string archivePath, std::string outputDirectory)
 			throw CocoaError(CocoaErrorCode::FileReadUnknown);
 		}
 
-		std::string filename(cFilename);
+		std::string filename(cFilename, std::min<size_t>(info.size_filename, ALTMaxFilenameLength));
+        // Validate before interpreting Windows paths or creating any entries.
+        if (info.size_filename >= ALTMaxFilenameLength || !ArchiveSafety::SafeName(filename) ||
+            !ArchiveSafety::SafeSize(zipInfo.number_entry, info.uncompressed_size, expandedBytes) ||
+            (info.flag & 1) || ((info.external_fa >> 16) & 0170000) == 0120000 ||
+            MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, filename.data(), static_cast<int>(filename.size()), nullptr, 0) == 0) {
+            finish(); throw CocoaError(CocoaErrorCode::FileReadCorruptFile);
+        }
+        expandedBytes += info.uncompressed_size;
 		if (startsWith(filename, "__MACOSX"))
 		{
 			if (i + 1 < zipInfo.number_entry)
@@ -124,7 +136,7 @@ void UnzipArchive(std::string archivePath, std::string outputDirectory)
 		std::replace(filename.begin(), filename.end(), '/', ALTDirectoryDeliminator);
 		filename = replace_all(filename, ":", "__colon__");
 
-		fs::path filepath = fs::path(outputDirectory).append(filename);
+		fs::path filepath = fs::path(outputDirectory).append(fs::u8path(filename));
 		fs::path parentDirectory = (filename[filename.size() - 1] == ALTDirectoryDeliminator) ? filepath.parent_path().parent_path() : filepath.parent_path();
 
 		if (!fs::exists(parentDirectory))
@@ -148,7 +160,7 @@ void UnzipArchive(std::string archivePath, std::string outputDirectory)
 
 			std::string narrowFilepath = StringFromWideString(filepath.c_str());
 
-			outputFile = fopen(narrowFilepath.c_str(), "wb");
+			outputFile = _wfopen(filepath.c_str(), L"wb");
 			if (outputFile == NULL)
 			{
 				finish();
@@ -156,6 +168,7 @@ void UnzipArchive(std::string archivePath, std::string outputDirectory)
 			}
 
 			int result = UNZ_OK;
+            uint64_t written = 0;
 
 			do
 			{
@@ -167,7 +180,11 @@ void UnzipArchive(std::string archivePath, std::string outputDirectory)
 					throw CocoaError(CocoaErrorCode::FileReadUnknown);
 				}
 
-				size_t count = fwrite(buffer, result, 1, outputFile);
+				written += result;
+                if (written > info.uncompressed_size || written > ArchiveSafety::MaxFile) {
+                    finish(); throw CocoaError(CocoaErrorCode::FileReadCorruptFile);
+                }
+                size_t count = fwrite(buffer, result, 1, outputFile);
 				if (result > 0 && count != 1)
 				{
 					finish();
@@ -177,13 +194,13 @@ void UnzipArchive(std::string archivePath, std::string outputDirectory)
 			} while (result > 0);
 
 			short permissions = (info.external_fa >> 16) & 0x01FF;
-			_chmod(narrowFilepath.c_str(), permissions);
+			_wchmod(filepath.c_str(), permissions);
 
 			fclose(outputFile);
 			outputFile = NULL;
 		}
 
-		unzCloseCurrentFile(zipFile);
+		if (unzCloseCurrentFile(zipFile) != UNZ_OK) { finish(); throw CocoaError(CocoaErrorCode::FileReadCorruptFile); }
 
 		if (i + 1 < zipInfo.number_entry)
 		{

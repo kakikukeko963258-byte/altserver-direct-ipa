@@ -70,4 +70,12 @@ inline void Install(const std::string& app, const std::shared_ptr<Device>& devic
     RunWorker({L"install", utility::conversions::to_string_t(app),
         utility::conversions::to_string_t(device->identifier())}, 950000);
 }
+inline bool Queue(const std::wstring& ipa) {
+    // Approval is a local Explorer action; it never installs or sends the file.
+    auto approved = Directory() / L"ApprovedIPAs";
+    if (!std::filesystem::is_regular_file(Directory() / L"config.json") ||
+        !std::filesystem::is_directory(approved)) return false;
+    auto target = approved / std::filesystem::path(ipa).filename();
+    return CopyFileW(ipa.c_str(), target.c_str(), TRUE) != FALSE;
+}
 }

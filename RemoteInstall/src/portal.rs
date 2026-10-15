@@ -70,9 +70,13 @@ async fn install(State(app): State<App>, headers: HeaderMap, Json(request): Json
 }
 async fn run_install(app: &App, path: PathBuf) -> Result<String> {
     let state_file = crate::directory()?.join("state.txt");
+    // canonicalize() uses the Win32 verbatim prefix; the native local-file
+    // validator intentionally accepts conventional absolute drive paths only.
+    let native_path = path.to_string_lossy();
+    let native_path = native_path.strip_prefix(r"\\?\").unwrap_or(&native_path);
     // Launcher exit 0 means the native process accepted and reset the dedicated
     // remote state; a rejected request must not reuse an earlier success.
-    let exit = tokio::process::Command::new(&app.native).arg("--install-remote").arg(path)
+    let exit = tokio::process::Command::new(&app.native).arg("--install-remote").arg(native_path)
         .stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).status().await?;
     ensure!(exit.success(), "Native server rejected request");
     for _ in 0..1800 {
