@@ -12,6 +12,12 @@ extern "C" {
 #include "zip.h"
 }
 namespace fs = std::filesystem;
+std::wstring WideStringFromString(std::string text) {
+    int length = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), nullptr, 0);
+    std::wstring result(length, L'\0');
+    MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS, text.data(), static_cast<int>(text.size()), result.data(), length);
+    return result;
+}
 std::string StringFromWideString(std::wstring text) {
     int length = WideCharToMultiByte(CP_UTF8, 0, text.data(), static_cast<int>(text.size()), nullptr, 0, nullptr, nullptr);
     std::string result(length, '\0');

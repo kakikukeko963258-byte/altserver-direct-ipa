@@ -18,7 +18,7 @@ inline bool SafeName(const std::string& path) {
         for (unsigned char c : part) if (c < 32 || c == 127 || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' || c == '|') return false;
         auto base = part.substr(0, part.find('.'));
         std::transform(base.begin(), base.end(), base.begin(), [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
-        if (base == "CON" || base == "PRN" || base == "AUX" || base == "NUL" ||
+        if (base == "CON" || base == "PRN" || base == "AUX" || base == "NUL" || base == "CONIN$" || base == "CONOUT$" ||
             (base.size() == 4 && (base.substr(0,3) == "COM" || base.substr(0,3) == "LPT") && base[3] >= '1' && base[3] <= '9')) return false;
         if (end == std::string::npos) break;
         start = end + 1;

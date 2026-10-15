@@ -11,7 +11,7 @@ $include = Join-Path $root 'AltSign\Dependencies\minizip'
 $library = Join-Path $root 'vcpkg_installed\x86-windows\lib'
 $release = Join-Path $root 'Release'
 $win32 = Join-Path $root 'Win32\Release'
-$compile = 'call "' + $development + '" && cl /nologo /EHsc /std:c++17 /utf-8 /MD /I"' + $include + '" "' + $test + '" /Fe:"' + $exe + '" /Fo:"' + $obj + '" /link /LIBPATH:"' + $library + '" /LIBPATH:"' + $release + '" /LIBPATH:"' + $win32 + '" AltSign.lib z.lib'
+$compile = 'call "' + $development + '" && cl /nologo /EHsc /std:c++17 /utf-8 /MD /I"' + $include + '" "' + $test + '" /Fe:"' + $exe + '" /Fo:"' + $obj + '" /link /LIBPATH:"' + $library + '" /LIBPATH:"' + $release + '" /LIBPATH:"' + $win32 + '" AltSign.lib cpprest_2_10.lib z.lib'
 & cmd.exe /d /s /c $compile
 if ($LASTEXITCODE -ne 0) { throw 'Archive test compilation failed.' }
 $savedPath = $env:PATH
