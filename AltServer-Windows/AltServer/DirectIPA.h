@@ -294,7 +294,11 @@ inline void BeginInstall(HWND window) {
     State("discovering-devices");
     auto path = *pending;
     pending.reset();
-    if (!ValidPath(path)) { Alert(L"IPAファイルが移動または削除されました。"); busy = false; return; }
+    if (!ValidPath(path)) {
+        busy = false; State("failed");
+        if (remoteRequest) { remoteRequest = false; return; }
+        Alert(L"IPAファイルが移動または削除されました。"); return;
+    }
     auto device = remoteRequest ? RemoteIPA::RegisteredDevice() : SelectDevice(window);
     if (!device) { busy = false; return; }
     _selectedDevice = device;

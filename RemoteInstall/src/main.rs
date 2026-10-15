@@ -86,7 +86,7 @@ async fn run() -> Result<()> {
         Some("probe") if args.len() == 2 => {
             let (config, pairing) = load()?;
             device::checked_open(&config, &pairing).await?;
-            println!("Registered iPhone verified over VPN.");
+            // Called from the GUI process without a console: success is exit 0.
         }
         Some("install") if args.len() == 4 => {
             let (config, pairing) = load()?;
@@ -98,7 +98,7 @@ async fn run() -> Result<()> {
             let (mut handle, mut rsd) = device::checked_open(&config, &pairing).await?;
             tokio::time::timeout(Duration::from_secs(900),
                 idevice::utils::installation::install_package_rsd(&mut handle, &mut rsd, &path, None)).await??;
-            println!("InstallationProxy confirmed installation.");
+            // Only a completed InstallationProxy operation yields exit 0.
         }
         Some("serve") if args.len() == 2 => {
             let (config, _) = load()?;

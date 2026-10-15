@@ -31,7 +31,7 @@ pub async fn pair(ip: Ipv4Addr, bind: Ipv4Addr, app_root: String, trusted_wifi: 
     let _ = xpc.recv_root().await?;
     let mut pairing = RpPairingFile::generate("AltForgeRemote");
     let mut client = RemotePairingClient::new(xpc, "AltForgeRemote");
-    // The USB trusted tunnel authorizes pairing; a PIN requirement is not guessed.
+    // The existing trusted device tunnel authorizes pairing; a PIN requirement is not guessed.
     client.connect(&mut pairing, async || String::new()).await?;
     ensure!(client.paired_peer_device()?.remotepairing_udid == dev.udid, "Pairing identity mismatch");
     let mut random = [0u8; 32];
