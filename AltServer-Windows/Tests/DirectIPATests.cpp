@@ -69,7 +69,7 @@ int main() {
     try {
         check(ArchiveSafety::SafeName("Payload/Phone.app/Info.plist"), "allow normal archive members");
         check(ArchiveSafety::SafeName("Payload/Phone.app/"), "allow archive directories");
-        for (auto unsafe : {"../escape", "/escape", "Payload/../escape", "Payload\\escape", "C:escape", "Payload/CON.txt", "Payload/file. ", "Payload//file"})
+        for (auto unsafe : {"../escape", "/escape", "Payload/../escape", "Payload\\escape", "C:escape", "Payload/CON.txt", u8"Payload/COM¹.txt", "Payload/CONOUT$", "Payload/file. ", "Payload//file"})
             check(!ArchiveSafety::SafeName(unsafe), "reject archive traversal and Windows aliases");
         check(!ArchiveSafety::SafeName(std::string("Payload/a\0b", 11)), "reject embedded archive NUL");
         check(!ArchiveSafety::SafeSize(50001,1,0) && !ArchiveSafety::SafeSize(1,ArchiveSafety::MaxFile + 1,0) &&
