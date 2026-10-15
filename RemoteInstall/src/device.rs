@@ -7,12 +7,12 @@ use idevice::{IdeviceService, RsdService, RemoteXpcClient,
 use std::{net::Ipv4Addr, time::Duration};
 use crate::Config;
 
-pub async fn pair(ip: Ipv4Addr, bind: Ipv4Addr, app_root: String) -> Result<(Config, Vec<u8>)> {
+pub async fn pair(ip: Ipv4Addr, bind: Ipv4Addr, app_root: String, trusted_wifi: bool) -> Result<(Config, Vec<u8>)> {
     let mut mux = UsbmuxdConnection::default().await?;
     let devices: Vec<_> = mux.get_devices().await?.into_iter()
-        .filter(|d| d.connection_type == Connection::Usb).collect();
+        .filter(|d| if trusted_wifi { matches!(&d.connection_type, Connection::Network(_)) } else { d.connection_type == Connection::Usb }).collect();
     // Never silently register another phone when multiple devices are attached.
-    ensure!(devices.len() == 1, "Connect exactly one iPhone via USB for registration");
+    ensure!(devices.len() == 1, "Exactly one device is required on the selected trusted transport");
     let dev = &devices[0];
     let provider = dev.to_provider(UsbmuxdAddr::default(), "AltForgeRemote");
     let mut lockdown = LockdownClient::connect(&provider).await?;

@@ -1,7 +1,8 @@
 ﻿param(
     [string]$PhoneVpnIP,
     [string]$PcVpnIP,
-    [string]$AppDirectory = (Join-Path $PSScriptRoot 'app')
+    [string]$AppDirectory = (Join-Path $PSScriptRoot 'app'),
+    [switch]$UseTrustedWiFi
 )
 $ErrorActionPreference = 'Stop'
 if (-not $PhoneVpnIP -or -not $PcVpnIP) {
@@ -38,7 +39,8 @@ foreach ($sid in @($user,$system)) {
 Set-Acl -LiteralPath $folder -AclObject $acl
 $approved = Join-Path $folder 'ApprovedIPAs'
 [IO.Directory]::CreateDirectory($approved) | Out-Null
-& $worker pair $PhoneVpnIP $PcVpnIP $approved
+$mode = if ($UseTrustedWiFi) { 'pair-wifi' } else { 'pair' }
+& $worker $mode $PhoneVpnIP $PcVpnIP $approved
 if ($LASTEXITCODE -ne 0) { throw 'USB registration failed. Leave exactly one unlocked iPhone connected and enable Developer Mode.' }
 $verb = [Microsoft.Win32.Registry]::CurrentUser.CreateSubKey('Software\Classes\SystemFileAssociations\.ipa\shell\AltForgeRemoteIPA')
 try {

@@ -67,7 +67,8 @@ async fn main() {
 async fn run() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
     match args.get(1).map(String::as_str) {
-        Some("pair") if args.len() == 5 => {
+        Some("pair" | "pair-wifi") if args.len() == 5 => {
+            let trusted_wifi = args[1] == "pair-wifi";
             let ip = args[2].parse()?;
             let bind = args[3].parse()?;
             ensure!(private(ip) && private(bind) && ip != bind, "Use distinct private VPN IPv4 addresses");
@@ -75,8 +76,8 @@ async fn run() -> Result<()> {
             ensure!(root.is_dir(), "IPA folder missing");
             let dir = directory()?;
             ensure!(dir.is_dir() && !dir.join("config.json").exists(), "Run setup first; existing registration will not be overwritten");
-            println!("Keep exactly one iPhone connected over USB and unlocked. Accept Trust on iPhone if asked.");
-            let (config, pairing) = tokio::time::timeout(Duration::from_secs(120), device::pair(ip, bind, root.to_string_lossy().into())).await??;
+            println!("Keep one unlocked iPhone available on the selected trusted connection. Accept Trust on iPhone if asked.");
+            let (config, pairing) = tokio::time::timeout(Duration::from_secs(120), device::pair(ip, bind, root.to_string_lossy().into(), trusted_wifi)).await??;
             std::fs::write(dir.join("pairing.bin"), crypt(&pairing, true)?)?;
             std::fs::write(dir.join("token.bin"), crypt(config.token.as_bytes(), true)?)?;
             std::fs::write(dir.join("config.json"), serde_json::to_vec_pretty(&config)?)?;
