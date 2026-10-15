@@ -5,6 +5,7 @@
 #include "AnisetteData.h"
 #include "AppleSRP.hpp"
 #include "AuthPlist.h"
+#include "AuthNegotiation.h"
 
 #include <openssl/crypto.h>
 #include <openssl/evp.h>
@@ -266,7 +267,7 @@ pplx::task<std::pair<std::shared_ptr<Account>, std::shared_ptr<AppleAPISession>>
 	auto digestContext = std::shared_ptr<EVP_MD_CTX>(EVP_MD_CTX_new(), EVP_MD_CTX_free);
 	if (!digestContext || EVP_DigestInit_ex(digestContext.get(), EVP_sha256(), nullptr) != 1)
 	{
-		throw APIError(APIErrorCode::AuthenticationHandshakeFailed);
+		throw LocalizedAPIError(static_cast<int>(APIErrorCode::AuthenticationHandshakeFailed), "Could not initialize the Apple authentication digest.");
 	}
 
 	std::vector<std::string> ps = { "s2k", "s2k_fo" };
@@ -349,13 +350,13 @@ pplx::task<std::pair<std::shared_ptr<Account>, std::shared_ptr<AppleAPISession>>
 		auto passwordKey = ALTPBKDF2SRP(isS2K, password, salt, iterations);
 		if (passwordKey == ::nullopt)
 		{
-			throw APIError(APIErrorCode::AuthenticationHandshakeFailed);
+			throw LocalizedAPIError(static_cast<int>(APIErrorCode::AuthenticationHandshakeFailed), "Could not derive the Apple authentication password key.");
 		}
 
 		auto clientProof = srpContext->processChallenge(sanitizedAppleID, *passwordKey, salt, B_data);
 		if (!clientProof)
 		{
-			throw APIError(APIErrorCode::AuthenticationHandshakeFailed);
+			throw LocalizedAPIError(static_cast<int>(APIErrorCode::AuthenticationHandshakeFailed), "Apple SRP challenge could not be processed.");
 		}
 
 		time_t time;
@@ -417,7 +418,7 @@ pplx::task<std::pair<std::shared_ptr<Account>, std::shared_ptr<AppleAPISession>>
 				if (!srpContext->verifyServerProof(serverProof))
 				{
 					odslog("ERROR: Failed to verify session.");
-					throw APIError(APIErrorCode::AuthenticationHandshakeFailed);
+					throw LocalizedAPIError(static_cast<int>(APIErrorCode::AuthenticationHandshakeFailed), "Apple SRP server proof did not match.");
 				}
 
 				ALTDigestUpdateString(digestContext.get(), "|");
@@ -461,41 +462,16 @@ pplx::task<std::pair<std::shared_ptr<Account>, std::shared_ptr<AppleAPISession>>
 				plist_get_data_val(npNode, &npBytes, &npSize);
 
 				auto np = DataFromBytes(npBytes, npSize);
-				ALTDigestUpdateData(digestContext.get(), np);
-
-				size_t digest_len = EVP_MD_size(EVP_sha256());
-				if (np.size() != digest_len)
+				if (!VerifyAppleNegotiationProof(digestContext.get(), srpContext->sessionKey(), np))
 				{
-					odslog("ERROR: Neg proto hash is too short.");
-					throw APIError(APIErrorCode::AuthenticationHandshakeFailed);
-				}
-
-				std::vector<unsigned char> digest(digest_len);
-				unsigned int finalDigestLength = 0;
-				if (EVP_DigestFinal_ex(digestContext.get(), digest.data(), &finalDigestLength) != 1)
-				{
-					throw APIError(APIErrorCode::AuthenticationHandshakeFailed);
-				}
-				digest.resize(finalDigestLength);
-
-				auto hmacKey = ALTCreateSessionKey(*srpContext, "HMAC key:");
-				auto hmacOutput = ALTHMACSHA256(hmacKey, { { digest.data(), digest.size() } });
-				if (hmacOutput.size() != digest_len)
-				{
-					throw APIError(APIErrorCode::AuthenticationHandshakeFailed);
-				}
-
-				if (CRYPTO_memcmp(hmacOutput.data(), np.data(), digest_len) != 0)
-				{
-					odslog("ERROR: Invalid neg prot hmac.");
-					throw APIError(APIErrorCode::AuthenticationHandshakeFailed);
+					throw LocalizedAPIError(static_cast<int>(APIErrorCode::AuthenticationHandshakeFailed), "Apple's negotiated protocol proof did not match the authenticated transcript.");
 				}
 
 				auto decryptedData = ALTDecryptDataCBC(*srpContext, spd);
 				if (decryptedData == ::nullopt)
 				{
 					odslog("ERROR: Could not decrypt login response.");
-					throw APIError(APIErrorCode::AuthenticationHandshakeFailed);
+					throw LocalizedAPIError(static_cast<int>(APIErrorCode::AuthenticationHandshakeFailed), "Apple authenticated login payload could not be decrypted.");
 				}
 
 				plist_t decryptedPlist = ParseAuthPlist(*decryptedData);

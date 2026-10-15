@@ -48,6 +48,7 @@ constexpr int ID_LOGIN = 1;
 BOOL CALLBACK LoginDlgProc(HWND, UINT, WPARAM, LPARAM);
 #include "../AltServer/DirectIPA.h"
 #include "../AltSign/AuthPlist.h"
+#include "../AltSign/AuthNegotiation.h"
 #include "../AltSign/GSAHttpClient.h"
 #include <openssl/pem.h>
 #include <openssl/sha.h>
@@ -68,6 +69,35 @@ int main() {
     HWND sender = nullptr;
     HWND receiver = nullptr;
     try {
+        // Independent .NET SHA256/HMAC fixture following upstream AltSign's
+        // transcript: protocols || selected | LE32(spd size) spd |
+        // LE32(sc size) sc |. All data and keys here are synthetic.
+        std::vector<unsigned char> transcript;
+        const std::string prefix = "s2k,s2k_fo||s2k|";
+        transcript.insert(transcript.end(), prefix.begin(), prefix.end());
+        transcript.insert(transcript.end(), {3, 0, 0, 0, 1, 2, 3, '|', 2, 0, 0, 0, 4, 5, '|'});
+        std::vector<unsigned char> key(32);
+        for (size_t i = 0; i < key.size(); ++i) key[i] = static_cast<unsigned char>(i);
+        std::vector<unsigned char> proof = {0x24,0x08,0x47,0xd0,0x44,0x43,0x13,0x96,0xe1,0x2f,0x0d,0x20,0xd0,0xfe,0xc1,0xde,0xb5,0x51,0x76,0x54,0xda,0x5e,0xea,0xca,0x95,0xee,0x7b,0xbc,0xd0,0xbd,0x92,0x5c};
+        auto verify = [](const auto& input, const auto& sessionKey, const auto& expected) {
+            auto context = std::unique_ptr<EVP_MD_CTX, decltype(&EVP_MD_CTX_free)>(EVP_MD_CTX_new(), EVP_MD_CTX_free);
+            if (!context || EVP_DigestInit_ex(context.get(), EVP_sha256(), nullptr) != 1 ||
+                EVP_DigestUpdate(context.get(), input.data(), input.size()) != 1) return false;
+            return VerifyAppleNegotiationProof(context.get(), sessionKey, expected);
+        };
+        check(verify(transcript, key, proof), "verify upstream negotiation transcript fixture");
+        auto selfIncluded = transcript;
+        selfIncluded.insert(selfIncluded.end(), {32,0,0,0});
+        selfIncluded.insert(selfIncluded.end(), proof.begin(), proof.end());
+        check(!verify(selfIncluded, key, proof), "reject transcript that includes the proof itself");
+        auto changedProof = proof; changedProof[0] ^= 1;
+        check(!verify(transcript, key, changedProof), "reject tampered negotiation proof");
+        auto changedKey = key; changedKey[0] ^= 1;
+        check(!verify(transcript, changedKey, proof), "reject wrong negotiation session key");
+        auto changedTranscript = transcript; changedTranscript[0] ^= 1;
+        check(!verify(changedTranscript, key, proof), "reject tampered negotiation transcript");
+        proof.pop_back();
+        check(!verify(transcript, key, proof), "reject truncated negotiation proof");
         check(GSAHttpClient::IsSafePath("/grandslam/GsService2"), "allow fixed-host authentication path");
         check(!GSAHttpClient::IsSafePath("//untrusted.invalid/auth"), "reject alternate host");
         check(!GSAHttpClient::IsSafePath("https://untrusted.invalid/auth"), "reject absolute URL");
