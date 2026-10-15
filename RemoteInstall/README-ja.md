@@ -7,7 +7,7 @@ PCとiPhoneを同じTailscaleなどのVPNへ接続し、iPhoneのAltForge Remote
 ## 初回設定（自宅で）
 
 1. PCとiPhoneへTailscaleを入れ、同じアカウントでログインしてVPNをオンにします。出口ノードの設定は不要です。
-2. リモート対応の改造版AltServer.exeとaltforge-remote.exeを同じappフォルダーに置きます。通常版AltServerは終了してください。
+2. リモート対応の改造版AltServer.exeとaltforge-remote.exeを同じappフォルダーに置きます。通常版AltServerと以前の改造版は終了してから、本試作版を起動してください。
 3. iPhoneの開発者モードを有効にし、USBでPCを信頼します。端末登録時だけ、USBに接続するiPhoneを1台にしてください。
 4. Setup-Remote.ps1を実行します。TailscaleでオンラインのiPhoneが1台ならアドレスを自動取得します。複数台やWireGuardの場合は、iPhoneとPCのVPN IPv4アドレス、appフォルダーを指定します。ペアリング情報はWindowsユーザー専用のフォルダーに暗号化して保存します。
 5. 両方のVPNをオンにしてTest-Remote.ps1を実行します。登録したiPhoneの照合に成功してから先へ進みます。
