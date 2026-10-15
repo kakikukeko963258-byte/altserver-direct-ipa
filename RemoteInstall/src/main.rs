@@ -21,7 +21,7 @@ pub fn directory() -> Result<PathBuf> {
         .join("AltServerDirectIPA").join("Remote"))
 }
 fn private(ip: Ipv4Addr) -> bool {
-    (ip.is_private() || (ip.octets()[0] == 100 && (64..128).contains(&ip.octets()[1]))) && !ip.is_loopback() && ip.octets()[3] != 0 && ip.octets()[3] != 255
+    (ip.is_private() || (ip.octets()[0] == 100 && (64..128).contains(&ip.octets()[1]))) && !ip.is_loopback()
 }
 fn load() -> Result<(Config, Vec<u8>)> {
     let dir = directory()?;
@@ -127,10 +127,12 @@ mod tests {
     use super::*;
     #[test]
     fn public_and_unspecified_addresses_rejected() {
-        for ip in ["0.0.0.0", "127.0.0.1", "8.8.8.8", "224.0.0.1", "10.7.0.0", "10.7.0.255"] {
+        for ip in ["0.0.0.0", "127.0.0.1", "8.8.8.8", "224.0.0.1", "100.128.0.1"] {
             assert!(!private(ip.parse().unwrap()));
         }
         assert!(private("10.77.0.2".parse().unwrap()));
+        assert!(private("100.64.1.0".parse().unwrap()));
+        assert!(private("100.127.1.255".parse().unwrap()));
     }
     #[cfg(windows)]
     #[test]
