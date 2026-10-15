@@ -57,17 +57,16 @@ $stockServerID = Read-RegistryValue 'HKCU:\SOFTWARE\RileyTestut\AltServer' 'Serv
 if (-not (Read-RegistryValue $serverSettings 'ServerID') -and $stockServerID) {
     New-ItemProperty -LiteralPath $serverSettings -Name ServerID -Value $stockServerID -PropertyType String -Force | Out-Null
 }
-# Reuse the stock server's encrypted certificate cache locally so switching
-# implementations does not unnecessarily revoke the existing signing certificate.
-# Account information and keys are never included in build output or logs.
-$stockCertificates = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'AltServer\Certificates'
-$modifiedCertificates = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'AltForge\AltServer\Certificates'
-if (Test-Path -LiteralPath $stockCertificates -PathType Container) {
-    $certificates = @(Get-ChildItem -LiteralPath $stockCertificates -Filter '*.p12' -File)
+# Both implementations now use the stock certificate directory. Import only
+# absent files from older derivative versions; never overwrite stock's cache.
+$sharedCertificates = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'AltServer\Certificates'
+$previousCertificates = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'AltForge\AltServer\Certificates'
+if (Test-Path -LiteralPath $previousCertificates -PathType Container) {
+    $certificates = @(Get-ChildItem -LiteralPath $previousCertificates -Filter '*.p12' -File)
     if ($certificates.Count) {
-        New-Item -ItemType Directory -Path $modifiedCertificates -Force | Out-Null
+        [IO.Directory]::CreateDirectory($sharedCertificates) | Out-Null
         foreach ($certificate in $certificates) {
-            $destination = Join-Path $modifiedCertificates $certificate.Name
+            $destination = Join-Path $sharedCertificates $certificate.Name
             if (-not (Test-Path -LiteralPath $destination)) {
                 Copy-Item -LiteralPath $certificate.FullName -Destination $destination
             }

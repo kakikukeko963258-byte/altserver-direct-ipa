@@ -2137,15 +2137,17 @@ fs::path AltServerApp::appDataDirectoryPath() const
 
 fs::path AltServerApp::certificatesDirectoryPath() const
 {
-	auto appDataPath = this->appDataDirectoryPath();
-	auto certificatesDirectoryPath = appDataPath.append("Certificates");
-
-	if (!fs::exists(certificatesDirectoryPath))
-	{
-		fs::create_directory(certificatesDirectoryPath);
-	}
-
-	return certificatesDirectoryPath;
+	// Stock AltServer and this derivative must reuse the same certificate/key.
+	// Separate caches can cause each server to replace the other's certificate.
+	wchar_t* programDataDirectory = nullptr;
+	if (FAILED(SHGetKnownFolderPath(FOLDERID_ProgramData, 0, nullptr, &programDataDirectory)))
+		throw std::runtime_error("Could not locate the shared AltServer certificate directory.");
+	fs::path directory(programDataDirectory);
+	CoTaskMemFree(programDataDirectory);
+	directory /= "AltServer";
+	directory /= "Certificates";
+	fs::create_directories(directory);
+	return directory;
 }
 
 fs::path AltServerApp::developerDisksDirectoryPath() const
