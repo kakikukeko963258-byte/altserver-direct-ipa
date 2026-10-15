@@ -5,7 +5,7 @@
 #include <fstream>
 #include <vector>
 #include <cpprest/json.h>
-#include "Device.hpp"
+#include "../AltSign/Device.hpp"
 
 namespace RemoteIPA {
 inline std::filesystem::path Directory() {
