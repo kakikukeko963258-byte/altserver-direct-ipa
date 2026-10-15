@@ -20,14 +20,19 @@ jobs:
           $vs = & $vswhere -latest -products * -property installationPath | Select-Object -First 1
           $versions = (Get-ChildItem (Join-Path $vs 'VC/Tools/MSVC') -Directory | Sort-Object Name | ForEach-Object Name) -join '-'
           if (-not $versions) { throw 'C++ toolchain version missing' }
-          "version=$versions" >> $env:GITHUB_OUTPUT
+          $compiler = Get-ChildItem (Join-Path $vs 'VC/Tools/MSVC/*/bin/Hostx64/x86/cl.exe') | Sort-Object FullName | Select-Object -Last 1
+          if (-not $compiler) { throw 'C++ compiler missing' }
+          $compilerVersion = $compiler.VersionInfo.FileVersion -replace '\s',''
+          $sdk = Get-ChildItem 'C:/Program Files (x86)/Windows Kits/10/Include' -Directory | Sort-Object Name | Select-Object -Last 1 -ExpandProperty Name
+          "version=$versions-$compilerVersion-$sdk-$env:ImageVersion" >> $env:GITHUB_OUTPUT
       - uses: actions/cache/restore@v4
         id: cache
         with:
           path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
-          key: native-x86-v2-${{ steps.toolchain.outputs.version }}-${{ hashFiles('AltServer-Windows/vcpkg.json') }}
+          key: native-x86-v3-${{ steps.toolchain.outputs.version }}-${{ hashFiles('AltServer-Windows/vcpkg.json') }}
           restore-keys: |
-            native-x86-v2-${{ steps.toolchain.outputs.version }}-
+            native-x86-v3-${{ steps.toolchain.outputs.version }}-
+            native-x86-v2-
             native-x86-v1-
       - uses: actions/checkout@v6
         with:
@@ -47,7 +52,7 @@ jobs:
         if: always() && steps.cache.outputs.cache-hit != 'true'
         with:
           path: ${{ env.VCPKG_DEFAULT_BINARY_CACHE }}
-          key: native-x86-v2-${{ steps.toolchain.outputs.version }}-${{ hashFiles('AltServer-Windows/vcpkg.json') }}
+          key: native-x86-v3-${{ steps.toolchain.outputs.version }}-${{ hashFiles('AltServer-Windows/vcpkg.json') }}
       - name: Test direct bridge
         shell: pwsh
         run: ./AltServer-Windows/Scripts/test-direct-ipa.ps1
