@@ -201,12 +201,16 @@ Certificate::Certificate(std::vector<unsigned char>& p12Data, std::string passwo
 	PKCS12* inputP12 = d2i_PKCS12_bio(inputP12Buffer, NULL);
 
 	// Extract key + certificate from .p12.
-	EVP_PKEY* key;
-	X509* certificate;
-	PKCS12_parse(inputP12, password.c_str(), &key, &certificate, NULL);
+	EVP_PKEY* key = nullptr;
+	X509* certificate = nullptr;
+	int parsed = inputP12 ? PKCS12_parse(inputP12, password.c_str(), &key, &certificate, NULL) : 0;
+	PKCS12_free(inputP12);
+	BIO_free(inputP12Buffer);
 
-	if (key == nullptr || certificate == nullptr)
+	if (parsed != 1 || key == nullptr || certificate == nullptr)
 	{
+		EVP_PKEY_free(key);
+		X509_free(certificate);
 		throw APIError(APIErrorCode::InvalidResponse);
 	}
 

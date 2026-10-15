@@ -53,6 +53,9 @@ BOOL CALLBACK LoginDlgProc(HWND, UINT, WPARAM, LPARAM);
 #include "../AltSign/GSAHttpClient.h"
 #include <openssl/pem.h>
 #include <openssl/sha.h>
+// Compile the actual CSR implementation in this isolated test executable.
+#include "../AltSign/Error.cpp"
+#include "../AltSign/CertificateRequest.cpp"
 
 int main() {
     auto check = [](bool condition, const char* label) {
@@ -70,6 +73,21 @@ int main() {
     HWND sender = nullptr;
     HWND receiver = nullptr;
     try {
+        CertificateRequest generatedRequest;
+        auto csrBytes = generatedRequest.data();
+        auto keyBytes = generatedRequest.privateKey();
+        auto csrBio = BIO_new_mem_buf(csrBytes.data(), static_cast<int>(csrBytes.size()));
+        auto csrObject = PEM_read_bio_X509_REQ(csrBio, nullptr, nullptr, nullptr);
+        check(csrObject && X509_REQ_get_version(csrObject) == 0, "generate valid PKCS10 version-zero request");
+        check(X509_REQ_get_signature_nid(csrObject) == NID_sha256WithRSAEncryption, "sign certificate request with SHA256");
+        auto csrPublic = X509_REQ_get_pubkey(csrObject);
+        check(csrPublic && EVP_PKEY_bits(csrPublic) == 2048 && X509_REQ_verify(csrObject, csrPublic) == 1, "verify generated 2048-bit RSA request signature");
+        auto keyBio = BIO_new_mem_buf(keyBytes.data(), static_cast<int>(keyBytes.size()));
+        auto csrPrivate = PEM_read_bio_PrivateKey(keyBio, nullptr, nullptr, nullptr);
+        check(csrPrivate && EVP_PKEY_eq(csrPrivate, csrPublic) == 1, "generated private key matches certificate request");
+        OPENSSL_cleanse(keyBytes.data(), keyBytes.size());
+        EVP_PKEY_free(csrPrivate); EVP_PKEY_free(csrPublic);
+        X509_REQ_free(csrObject); BIO_free(csrBio); BIO_free(keyBio);
         // Fixed Python gzip fixture, containing no account data.
         std::vector<uint8_t> gzip = {0x1f,0x8b,0x08,0x00,0x00,0x00,0x00,0x00,0x02,0x0a,0xb3,0xb1,0xaf,0xc8,0xcd,0x51,0x28,0x4b,0x2d,0x2a,0xce,0xcc,0xcf,0xb3,0x55,0x32,0xd4,0x33,0x50,0xb2,0xb7,0xb3,0x29,0xc8,0xc9,0x2c,0x2e,0x41,0x15,0xb5,0xb3,0x49,0xc9,0x4c,0x2e,0xb1,0xb3,0xc9,0x4e,0xad,0xb4,0x4b,0x4d,0xb6,0xd1,0x07,0xd1,0x36,0x99,0x79,0x25,0xa9,0xe9,0xa9,0x45,0x76,0x06,0x36,0xfa,0x30,0xa6,0x8d,0x3e,0x44,0x9d,0x3e,0xd8,0x0c,0x3b,0x00,0x75,0xc0,0x36,0x03,0x60,0x00,0x00,0x00};
         std::vector<uint8_t> decoded;

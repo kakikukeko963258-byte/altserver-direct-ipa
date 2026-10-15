@@ -23,7 +23,17 @@ foreach ($key in @($menu, $settings, $serverSettings, $stockSettings)) {
 }
 if ((Read-Value $run 'AltServer') -or (Read-Value $run 'AltForge Server')) { throw 'An AltServer startup entry already exists; refusing to run integration tests.' }
 $stockCommand = '"C:\Synthetic Test\AltServer.exe"'
+$stockCache = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'AltServer\Certificates'
+$modifiedCache = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'AltForge\AltServer\Certificates'
+$cacheName = 'Synthetic-' + [guid]::NewGuid().ToString('N') + '.p12'
+$sourceCache = Join-Path $stockCache $cacheName
+$targetCache = Join-Path $modifiedCache $cacheName
+foreach ($directory in @($stockCache, $modifiedCache)) {
+    if (Test-Path -LiteralPath $directory) { throw 'Refusing to overwrite an existing certificate directory.' }
+}
 try {
+    [IO.Directory]::CreateDirectory($stockCache) | Out-Null
+    [IO.File]::WriteAllText($sourceCache, 'synthetic cache; never decrypted')
     New-Item -ItemType Directory -Path $fixture | Out-Null
     Copy-Item -LiteralPath (Join-Path $PSScriptRoot 'install-direct-menu.ps1') -Destination $fixture
     Set-Content -LiteralPath (Join-Path $fixture 'AltServer.exe') -Value 'synthetic placeholder; never executed'
@@ -47,6 +57,7 @@ try {
     Check ((Read-Value $run $sentinel) -eq 'preserve existing startup value') 'unrelated startup values survive'
     Check ((Read-Value $serverSettings AppleFolder) -eq $appleFolder) 'migrate portable Apple folder'
     Check ((Read-Value $serverSettings ServerID) -eq $syntheticServerID) 'migrate server identity'
+    Check ((Test-Path -LiteralPath $targetCache) -and [IO.File]::ReadAllText($targetCache) -eq 'synthetic cache; never decrypted') 'migrate cache to actual runtime ProgramData directory'
     Check ((Read-Value $settings StockStartupCommand) -eq $stockCommand) 'backup stock startup'
     Check ($null -eq (Read-Value $run AltServer)) 'disable duplicate stock startup'
     $executable = Join-Path $fixture 'AltServer.exe'
@@ -57,6 +68,7 @@ try {
     Check ((Read-Value $settings StockStartupCommand) -eq $stockCommand) 'repeat install preserves backup'
     Check ((Read-Value $serverSettings AppleFolder) -eq $appleFolder) 'repeat install preserves preferences'
     Check ((Read-Value $serverSettings ServerID) -eq $syntheticServerID) 'repeat install preserves server identity'
+    Check ([IO.File]::ReadAllText($targetCache) -eq 'synthetic cache; never decrypted') 'repeat install preserves certificate cache'
     Check ((Read-Value $run $sentinel) -eq 'preserve existing startup value') 'repeat install preserves unrelated startup'
     & powershell.exe -NoProfile -ExecutionPolicy Bypass -File $script -Uninstall
     Check ($LASTEXITCODE -eq 0) 'uninstall succeeds'
@@ -66,6 +78,12 @@ try {
     Check ((Read-Value $run $sentinel) -eq 'preserve existing startup value') 'uninstall preserves unrelated startup'
     Write-Host 'Direct IPA registry integration checks passed.'
 } finally {
+    foreach ($cacheFile in @($sourceCache, $targetCache)) {
+        if (Test-Path -LiteralPath $cacheFile) { Remove-Item -LiteralPath $cacheFile }
+    }
+    foreach ($directory in @($stockCache, $modifiedCache)) {
+        if ((Test-Path -LiteralPath $directory) -and -not (Get-ChildItem -LiteralPath $directory -Force)) { Remove-Item -LiteralPath $directory }
+    }
     foreach ($key in @($menu, $settings, $serverSettings, $stockSettings)) {
         if (Test-Path -LiteralPath $key) { Remove-Item -LiteralPath $key -Recurse -Force }
     }

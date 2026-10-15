@@ -13,6 +13,7 @@
 #include <Guiddef.h>
 
 #include "AppleAPI.hpp"
+#include "CertificateRequest.hpp"
 #include "ConnectionManager.hpp"
 #include "InstallError.hpp"
 #include "Signer.hpp"
@@ -1098,6 +1099,9 @@ pplx::task<std::shared_ptr<Certificate>> AltServerApp::FetchCertificate(std::sha
 
               if (certificates.size() != 0)
               {
+                  // Validate local CSR generation before any certificate can
+                  // be revoked. A local crypto failure must leave it intact.
+                  CertificateRequest validatedRequest;
                   auto certificate = (preferredCertificate != nullptr) ? preferredCertificate : certificates[0];
                   return AppleAPI::getInstance()->RevokeCertificate(certificate, team, session).then([this, team, session](bool success)
                                                                                             {

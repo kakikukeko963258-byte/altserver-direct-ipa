@@ -61,7 +61,7 @@ if (-not (Read-RegistryValue $serverSettings 'ServerID') -and $stockServerID) {
 # implementations does not unnecessarily revoke the existing signing certificate.
 # Account information and keys are never included in build output or logs.
 $stockCertificates = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'AltServer\Certificates'
-$modifiedCertificates = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'AltForge\AltServer\Certificates'
+$modifiedCertificates = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'AltForge\AltServer\Certificates'
 if (Test-Path -LiteralPath $stockCertificates -PathType Container) {
     $certificates = @(Get-ChildItem -LiteralPath $stockCertificates -Filter '*.p12' -File)
     if ($certificates.Count) {
