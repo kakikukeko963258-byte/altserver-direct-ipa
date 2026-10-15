@@ -24,7 +24,7 @@ extern "C" {
 #include "AppleAPI.hpp"
 #include "AuthPlist.h"
 
-#include <cpprest/http_compression.h>
+#include "AppleResponseCompression.h"
 
 #include <openssl/pem.h>
 #include <openssl/pkcs12.h>
@@ -55,47 +55,7 @@ extern std::wstring WideStringFromString(std::string string);
 
 bool decompress(const uint8_t* input, size_t input_size, std::vector<uint8_t>& output)
 {
-    auto decompressor = web::http::compression::builtin::make_decompressor(web::http::compression::builtin::algorithm::GZIP);
-
-    // Need to guard against attempting to decompress when we're already finished or encountered an error!
-    if (input == nullptr || input_size == 0)
-    {
-        return false;
-    }
-
-    size_t processed;
-    size_t got;
-    size_t inbytes = 0;
-    size_t outbytes = 0;
-    bool done;
-
-    try
-    {
-        output.resize(input_size * 3);
-        do
-        {
-            if (inbytes)
-            {
-                output.resize(output.size() + (std::max)(input_size, static_cast<size_t>(1024)));
-            }
-            got = decompressor->decompress(input + inbytes,
-                                             input_size - inbytes,
-                                             output.data() + outbytes,
-                                             output.size() - outbytes,
-                                           web::http::compression::operation_hint::is_last,
-                                             processed,
-                                             done);
-            inbytes += processed;
-            outbytes += got;
-        } while (got && !done);
-        output.resize(outbytes);
-    }
-    catch (...)
-    {
-        return false;
-    }
-
-    return true;
+    return DecompressAppleResponse(input, input_size, output);
 }
 
 AppleAPI* AppleAPI::instance_ = nullptr;

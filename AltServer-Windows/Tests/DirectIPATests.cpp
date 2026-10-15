@@ -49,6 +49,7 @@ BOOL CALLBACK LoginDlgProc(HWND, UINT, WPARAM, LPARAM);
 #include "../AltServer/DirectIPA.h"
 #include "../AltSign/AuthPlist.h"
 #include "../AltSign/AuthNegotiation.h"
+#include "../AltSign/AppleResponseCompression.h"
 #include "../AltSign/GSAHttpClient.h"
 #include <openssl/pem.h>
 #include <openssl/sha.h>
@@ -69,6 +70,23 @@ int main() {
     HWND sender = nullptr;
     HWND receiver = nullptr;
     try {
+        // Fixed Python gzip fixture, containing no account data.
+        std::vector<uint8_t> gzip = {0x1f,0x8b,0x08,0x00,0x00,0x00,0x00,0x00,0x02,0x0a,0xb3,0xb1,0xaf,0xc8,0xcd,0x51,0x28,0x4b,0x2d,0x2a,0xce,0xcc,0xcf,0xb3,0x55,0x32,0xd4,0x33,0x50,0xb2,0xb7,0xb3,0x29,0xc8,0xc9,0x2c,0x2e,0x41,0x15,0xb5,0xb3,0x49,0xc9,0x4c,0x2e,0xb1,0xb3,0xc9,0x4e,0xad,0xb4,0x4b,0x4d,0xb6,0xd1,0x07,0xd1,0x36,0x99,0x79,0x25,0xa9,0xe9,0xa9,0x45,0x76,0x06,0x36,0xfa,0x30,0xa6,0x8d,0x3e,0x44,0x9d,0x3e,0xd8,0x0c,0x3b,0x00,0x75,0xc0,0x36,0x03,0x60,0x00,0x00,0x00};
+        std::vector<uint8_t> decoded;
+        check(DecompressAppleResponse(gzip.data(), gzip.size(), decoded), "decode fixed gzip Apple response");
+        auto responsePlist = ParseAuthPlist(decoded);
+        check(responsePlist && plist_get_node_type(responsePlist) == PLIST_DICT, "parse expanded Apple response");
+        plist_free(responsePlist);
+        auto truncatedGzip = gzip; truncatedGzip.pop_back();
+        check(!DecompressAppleResponse(truncatedGzip.data(), truncatedGzip.size(), decoded) && decoded.empty(), "reject truncated gzip and clear output");
+        auto corruptGzip = gzip; corruptGzip[corruptGzip.size() - 8] ^= 1;
+        check(!DecompressAppleResponse(corruptGzip.data(), corruptGzip.size(), decoded) && decoded.empty(), "reject wrong gzip checksum");
+        check(!DecompressAppleResponse(nullptr, 0, decoded), "reject missing compressed input");
+        std::vector<uint8_t> excessive(4 * 1024 * 1024 + 1, 0);
+        uLongf compressedSize = compressBound(static_cast<uLong>(excessive.size()));
+        std::vector<uint8_t> bomb(compressedSize);
+        check(compress2(bomb.data(), &compressedSize, excessive.data(), static_cast<uLong>(excessive.size()), 9) == Z_OK, "prepare bounded-output test");
+        check(!DecompressAppleResponse(bomb.data(), compressedSize, decoded) && decoded.empty(), "reject expanded response above limit");
         // Independent .NET SHA256/HMAC fixture following upstream AltSign's
         // transcript: protocols || selected | LE32(spd size) spd |
         // LE32(sc size) sc |. All data and keys here are synthetic.
