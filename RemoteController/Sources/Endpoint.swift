@@ -18,3 +18,16 @@ func remoteEndpoint(address: String, token: String, path: String) throws -> URL 
           let url = URL(string: "http://\(host):49321\(path)") else { throw EndpointError.invalid }
     return url
 }
+func remoteConnection(from url: URL) -> (address: String, token: String)? {
+    guard let parts = URLComponents(url:url,resolvingAgainstBaseURL:false),
+          parts.scheme == "altforge-remote", parts.host == "setup", parts.path.isEmpty,
+          parts.user == nil, parts.password == nil, parts.port == nil, parts.fragment == nil,
+          let items = parts.queryItems, items.count == 2,
+          items.filter({$0.name == "ip"}).count == 1,
+          items.filter({$0.name == "token"}).count == 1,
+          let ip = items.first(where:{$0.name == "ip"})?.value,
+          let token = items.first(where:{$0.name == "token"})?.value else { return nil }
+    let address = "http://\(ip):49321"
+    guard (try? remoteEndpoint(address:address,token:token,path:"/api/apps")) != nil else { return nil }
+    return (address,token)
+}

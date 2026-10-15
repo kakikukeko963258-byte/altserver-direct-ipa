@@ -1,9 +1,21 @@
 ﻿param(
-    [Parameter(Mandatory=$true)][string]$PhoneVpnIP,
-    [Parameter(Mandatory=$true)][string]$PcVpnIP,
+    [string]$PhoneVpnIP,
+    [string]$PcVpnIP,
     [string]$AppDirectory = (Join-Path $PSScriptRoot 'app')
 )
 $ErrorActionPreference = 'Stop'
+if (-not $PhoneVpnIP -or -not $PcVpnIP) {
+    $tailscale = Join-Path $env:ProgramFiles 'Tailscale\tailscale.exe'
+    if (-not (Test-Path -LiteralPath $tailscale)) { throw 'Specify both VPN IPv4 addresses, or install and connect Tailscale.' }
+    $status = (& $tailscale status --json 2>$null | ConvertFrom-Json)
+    if ($LASTEXITCODE -ne 0 -or $status.BackendState -ne 'Running') { throw 'Connect Tailscale first.' }
+    $phones = @($status.Peer.PSObject.Properties.Value | Where-Object { $_.OS -eq 'iOS' -and $_.Online })
+    if ($phones.Count -ne 1) { throw 'Keep one iPhone online in Tailscale, or explicitly specify its VPN address.' }
+    $PhoneVpnIP = $phones[0].TailscaleIPs | Where-Object { $_ -match '^100\.' } | Select-Object -First 1
+    $PcVpnIP = $status.TailscaleIPs | Where-Object { $_ -match '^100\.' } | Select-Object -First 1
+    if (-not $PhoneVpnIP -or -not $PcVpnIP) { throw 'Tailscale IPv4 addresses unavailable.' }
+}
+
 $worker = Join-Path ([IO.Path]::GetFullPath($AppDirectory)) 'altforge-remote.exe'
 if (-not (Test-Path -LiteralPath $worker -PathType Leaf)) { throw 'Remote worker missing.' }
 $binding = @(Get-NetIPAddress -IPAddress $PcVpnIP -AddressFamily IPv4 -ErrorAction SilentlyContinue)

@@ -25,6 +25,9 @@ targets:
     info:
       path: Info.plist
       properties:
+        CFBundleURLTypes:
+          - CFBundleURLName: com.altforge.remotecontroller
+            CFBundleURLSchemes: [altforge-remote]
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
 schemes:

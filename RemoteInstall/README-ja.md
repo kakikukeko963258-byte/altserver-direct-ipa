@@ -9,12 +9,14 @@ PCとiPhoneを同じTailscaleなどのVPNへ接続し、iPhoneのAltForge Remote
 1. PCとiPhoneへTailscaleを入れ、同じアカウントでログインしてVPNをオンにします。出口ノードの設定は不要です。
 2. リモート対応の改造版AltServer.exeとaltforge-remote.exeを同じappフォルダーに置きます。通常版AltServerは終了してください。
 3. iPhoneの開発者モードを有効にし、USBでPCを信頼します。端末登録時だけ、USBに接続するiPhoneを1台にしてください。
-4. Setup-Remote.ps1にiPhoneとPCのVPN IPv4アドレス、appフォルダーを指定します。アドレスはTailscaleアプリ内で確認できます。ペアリング情報はWindowsユーザー専用のフォルダーに暗号化して保存します。
+4. Setup-Remote.ps1を実行します。TailscaleでオンラインのiPhoneが1台ならアドレスを自動取得します。複数台やWireGuardの場合は、iPhoneとPCのVPN IPv4アドレス、appフォルダーを指定します。ペアリング情報はWindowsユーザー専用のフォルダーに暗号化して保存します。
 5. 両方のVPNをオンにしてTest-Remote.ps1を実行します。登録したiPhoneの照合に成功してから先へ進みます。
 6. AltForgeRemote-unsigned.ipaを、既存の右クリックメニューから同じiPhoneへインストールします。初回のApple ID登録・追加認証はPCで済ませてください。無料アカウントのアプリ枠を1つ使用します。
-7. altforge-remote.exe connectionで作られるiphone-connection.jsonをiPhoneアプリの「設定ファイルを読み込む」で読み込みます。手入力する場合はPCのVPNアドレスと接続キーを入力します。このファイルは秘密情報なので公開・GitHubへの送信はしないでください。設定後は削除してください。
+7. altforge-remote.exe connectionで作られるiphone-connection.svgをPCに表示し、iPhoneのカメラでQRコードを読み取ります。またはiphone-connection.jsonをiPhoneアプリの「設定ファイルを読み込む」で読み込みます。手入力する場合はPCのVPNアドレスと接続キーを入力します。このファイルは秘密情報なので公開・GitHubへの送信はしないでください。設定後はQRコードと設定ファイルを削除してください。
 8. IPAを右クリックし「AltForge: 外出先のiPhone用に用意」で一覧に追加します。または`%LOCALAPPDATA%\AltServerDirectIPA\Remote\ApprovedIPAs`へ許可するIPAだけをコピーします。同名ファイルは自動で上書きしません。サブフォルダーやリンクは対象外です。
 9. Start-Remote.ps1を実行します。PCは起動したまま、Windowsユーザーはサインインしたままにします。PCがスリープすると通信できません。
+
+受信用アプリも無料Appleアカウントの署名期限の対象です。期限前に更新してください。
 
 ## 外での操作
 

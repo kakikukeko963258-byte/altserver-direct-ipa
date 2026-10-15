@@ -111,7 +111,10 @@ async fn run() -> Result<()> {
                 "url": format!("http://{}:49321", config.bind), "token": config.token
             }))?;
             std::fs::write(directory()?.join("iphone-connection.json"), content)?;
-            println!("Connection settings saved in the private Remote folder. Delete iphone-connection.json after setup.");
+            let qr = qrcode::QrCode::new(format!("altforge-remote://setup?ip={}&token={}", config.bind, config.token))?;
+            let svg = qr.render::<qrcode::render::svg::Color>().min_dimensions(384,384).build();
+            std::fs::write(directory()?.join("iphone-connection.svg"), svg)?;
+            println!("Connection settings and QR saved in the private Remote folder. Delete both after setup.");
         }
         _ => { anyhow::bail!("Usage: pair PHONE_VPN_IP PC_VPN_IP IPA_FOLDER | probe | serve | connection | install SIGNED_APP UDID"); }
     }

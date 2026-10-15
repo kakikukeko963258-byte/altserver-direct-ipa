@@ -128,6 +128,13 @@ private final class Client: ObservableObject {
             status = "設定を読み込みました。接続を確認してください。"
         } catch { status = "接続設定ファイルを読み込めませんでした。" }
     }
+    func importQRCode(_ url: URL) {
+        guard let connection = remoteConnection(from:url) else {
+            status = "接続用QRコードを読み込めませんでした。"; return
+        }
+        address = connection.address; token = connection.token
+        status = "QRコードから設定を読み込みました。「接続・状態を確認」を押してください。"
+    }
 }
 @main
 struct AltForgeRemoteApp: App {
@@ -156,6 +163,7 @@ struct AltForgeRemoteApp: App {
                     Section { Text("PCを起動したままにし、PCとiPhoneを同じVPNに接続してください。Apple IDと署名処理はPC側で管理します。") }
                 }
                 .navigationTitle("AltForge Remote")
+                .onOpenURL { client.importQRCode($0) }
                 .fileImporter(isPresented:$importing,allowedContentTypes:[.json]) { result in
                     if case .success(let url) = result { client.importSettings(url) }
                 }

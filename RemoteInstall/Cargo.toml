@@ -12,6 +12,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 subtle = "2"
 hex = "0.4"
+qrcode = { version = "0.14.1", default-features = false, features = ["svg"] }
 openssl = { version = "0.10", features = ["vendored"] }
 idevice = { git = "https://github.com/jkcoxson/idevice", rev = "3854a5df4a5a6dee71ffce4d8befc2ea356a8065", default-features = false, features = ["openssl", "tcp", "usbmuxd", "remote_pairing", "core_device_proxy", "tunnel_tcp_stack", "rsd", "afc", "installation_proxy"] }
 
