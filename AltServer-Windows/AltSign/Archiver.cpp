@@ -136,7 +136,7 @@ void UnzipArchive(std::string archivePath, std::string outputDirectory)
 		std::replace(filename.begin(), filename.end(), '/', ALTDirectoryDeliminator);
 		filename = replace_all(filename, ":", "__colon__");
 
-		fs::path filepath = fs::path(outputDirectory).append(fs::u8path(filename));
+		fs::path filepath = (fs::path(outputDirectory) / fs::u8path(filename));
 		fs::path parentDirectory = (filename[filename.size() - 1] == ALTDirectoryDeliminator) ? filepath.parent_path().parent_path() : filepath.parent_path();
 
 		if (!fs::exists(parentDirectory))
@@ -200,7 +200,7 @@ void UnzipArchive(std::string archivePath, std::string outputDirectory)
 			outputFile = NULL;
 		}
 
-		if (unzCloseCurrentFile(zipFile) != UNZ_OK) { finish(); throw CocoaError(CocoaErrorCode::FileReadCorruptFile); }
+		if (filename.back() != ALTDirectoryDeliminator && unzCloseCurrentFile(zipFile) != UNZ_OK) { finish(); throw CocoaError(CocoaErrorCode::FileReadCorruptFile); }
 
 		if (i + 1 < zipInfo.number_entry)
 		{

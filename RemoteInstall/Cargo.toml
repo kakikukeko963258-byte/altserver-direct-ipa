@@ -2,7 +2,7 @@
 name = "altforge-remote"
 version = "0.2.0"
 edition = "2024"
-license = "MIT"
+license = "AGPL-3.0-only"
 
 [dependencies]
 anyhow = "1"
