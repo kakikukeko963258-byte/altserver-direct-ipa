@@ -1,5 +1,5 @@
-//! Same-machine IPC for the native signer. No file-path/install endpoint is
-//! exposed on the VPN HTTP listener. Challenge authentication is mutual so a
+//! Same-machine IPC for the native signer. No signed-bundle path or raw-device
+//! operation is exposed on the VPN HTTP listener. Authentication is mutual so a
 //! fake pipe cannot collect the token or the signed application path.
 use anyhow::{Result, ensure, Context};
 use openssl::{pkey::PKey, sign::Signer, hash::MessageDigest};

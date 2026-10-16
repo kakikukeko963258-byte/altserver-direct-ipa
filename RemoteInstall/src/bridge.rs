@@ -52,12 +52,19 @@ impl Bridge {
         ensure!(path.is_dir() && path.extension().is_some_and(|e| e == "app"), "Expected signed app");
         let mut guard = self.session.lock().await;
         let active = guard.as_mut().context("Bridge is not connected")?;
-        let result = tokio::time::timeout(Duration::from_secs(900), async {
+        let outcome = tokio::time::timeout(Duration::from_secs(900), async {
             active.verify(udid).await?;
             idevice::utils::installation::install_package_rsd(&mut active.handle, &mut active.rsd, path, None).await?;
             Ok::<(),anyhow::Error>(())
-        }).await.context("Install timed out").and_then(|r| r);
-        if result.is_err() { *guard = None; self.connected.store(false, Ordering::Release); }
+        }).await;
+        let timed_out = outcome.is_err();
+        let result = outcome.context("Install timed out").and_then(|r| r);
+        if result.is_err() {
+            // App/profile rejection must not destroy a healthy outer tunnel:
+            // that would strand the user on cellular until Wi-Fi is available.
+            let live = !timed_out && matches!(tokio::time::timeout(Duration::from_secs(20),active.verify(udid)).await,Ok(Ok(())));
+            if !live { *guard = None; self.connected.store(false, Ordering::Release); }
+        }
         result
     }
 }
