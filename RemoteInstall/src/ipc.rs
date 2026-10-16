@@ -67,8 +67,10 @@ pub async fn call(config:&Config,request:Request) -> Result<()> {
             Err(_) => tokio::time::sleep(Duration::from_millis(100)).await,
         }
     }
-    let mut pipe = connected.context("Start the persistent bridge first")?;
-    tokio::time::timeout(Duration::from_secs(5),authenticate_client(&mut pipe,config.token.as_bytes())).await??;
+    let mut pipe = connected.context("Start the persistent bridge first").inspect_err(|_| eprintln!("Diagnostic: IPC open failed"))?;
+    tokio::time::timeout(Duration::from_secs(5),authenticate_client(&mut pipe,config.token.as_bytes())).await
+        .inspect_err(|_| eprintln!("Diagnostic: IPC authentication timed out"))?
+        .inspect_err(|_| eprintln!("Diagnostic: IPC authentication failed"))?;
     send(&mut pipe,&request).await?;
     let reply:Reply = tokio::time::timeout(Duration::from_secs(930),receive(&mut pipe)).await??;
     // DisconnectNamedPipe discards unread buffered bytes. Acknowledge receipt
@@ -91,6 +93,7 @@ pub async fn serve(config:Config,bridge:std::sync::Arc<crate::bridge::Bridge>) -
                     Request::Probe => bridge.verify().await,
                     Request::Install {app,udid} => bridge.install(std::path::Path::new(&app),&udid).await,
                 };
+                if result.is_err() { eprintln!("Diagnostic: broker operation failed"); }
                 if send(&mut pipe,&Reply {success:result.is_ok()}).await.is_ok() {
                     let mut ack = [0u8;1];
                     let _ = tokio::time::timeout(Duration::from_secs(5),pipe.read_exact(&mut ack)).await;

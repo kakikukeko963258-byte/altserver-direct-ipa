@@ -48,8 +48,10 @@ pub struct Session {
 }
 impl Session {
     pub async fn verify(&mut self, expected: &str) -> Result<()> {
-        let mut lockdown = LockdownClient::connect_rsd(&mut self.handle, &mut self.rsd).await?;
-        let udid = lockdown.get_value(Some("UniqueDeviceID"), None).await?;
+        let mut lockdown = LockdownClient::connect_rsd(&mut self.handle, &mut self.rsd).await
+            .inspect_err(|_| eprintln!("Diagnostic: device service connection failed"))?;
+        let udid = lockdown.get_value(Some("UniqueDeviceID"), None).await
+            .inspect_err(|_| eprintln!("Diagnostic: device identity request failed"))?;
         ensure!(udid.as_string() == Some(expected), "Device identity mismatch");
         Ok(())
     }

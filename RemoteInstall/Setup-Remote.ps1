@@ -29,14 +29,16 @@ $folder = Join-Path $env:LOCALAPPDATA 'AltServerDirectIPA\Remote'
 if (Test-Path -LiteralPath (Join-Path $folder 'config.json')) { throw 'A registration already exists. It was not changed.' }
 [IO.Directory]::CreateDirectory($folder) | Out-Null
 # Protect only this app's new state directory. Do not change system permissions.
-$acl = [Security.AccessControl.DirectorySecurity]::new()
-$acl.SetAccessRuleProtection($true,$false)
 $user = [Security.Principal.WindowsIdentity]::GetCurrent().User
 $system = [Security.Principal.SecurityIdentifier]::new('S-1-5-18')
-foreach ($sid in @($user,$system)) {
-    $acl.AddAccessRule([Security.AccessControl.FileSystemAccessRule]::new($sid,'FullControl','ContainerInherit,ObjectInherit','None','Allow'))
+# Change the DACL only; Set-Acl can also request privileged audit/owner access.
+& "$env:SystemRoot\System32\icacls.exe" $folder /grant:r "*$($user.Value):(OI)(CI)F" '*S-1-5-18:(OI)(CI)F' /inheritance:r /q | Out-Null
+if ($LASTEXITCODE -ne 0) { throw 'Could not protect the private registration directory.' }
+$acl = Get-Acl -LiteralPath $folder
+$rules = @($acl.GetAccessRules($true,$true,[Security.Principal.SecurityIdentifier]))
+if (-not $acl.AreAccessRulesProtected -or @($rules | Where-Object { $_.IdentityReference.Value -notin @($user.Value,$system.Value) }).Count -gt 0) {
+    throw 'The registration directory has unexpected permissions; no pairing was saved.'
 }
-Set-Acl -LiteralPath $folder -AclObject $acl
 $approved = Join-Path $folder 'ApprovedIPAs'
 [IO.Directory]::CreateDirectory($approved) | Out-Null
 $mode = if ($UseTrustedWiFi) { 'pair-wifi' } else { 'pair' }

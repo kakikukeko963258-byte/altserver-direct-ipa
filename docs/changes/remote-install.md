@@ -9,3 +9,5 @@ TEST: Build Windows native code and worker on Windows Actions; protocol/auth/pat
 T: Implement worker/setup, native dispatch, iOS controller, workflows and instructions. Do not replace the installed stable release until build checks pass. Cellular operation is experimental until physically verified.
 
 Cellular boundary: Tailscale connectivity and ping succeeded on the actual phone; fresh TCP connections to 49152 and 62078 failed on cellular. No device pairing, signing or remote install was established for that phone. A persistent Wi-Fi-to-cellular session is a design to test, not a verified outcome.
+
+2026-10-16 home setup: intended single USB phone registered; first authenticated VPN probe passed, subsequent probes failed. Investigating before roaming acceptance. Setup uses DACL-only icacls rather than Set-Acl, which requested SeSecurityPrivilege on repeat invocation. Fixed diagnostic labels contain no device/library error data.
