@@ -85,7 +85,7 @@ fn listener(name: &str, first: bool) -> std::io::Result<tokio::net::windows::nam
     tokio::net::windows::named_pipe::ServerOptions::new().first_pipe_instance(first)
         // Closed IOCP instances can remain alive briefly while Windows retires
         // their pending operations. Only one request is processed at a time.
-        .max_instances(255).reject_remote_clients(true).create(name)
+        .reject_remote_clients(true).create(name)
 }
 #[cfg(windows)]
 pub async fn serve(config:Config,bridge:std::sync::Arc<crate::bridge::Bridge>) -> Result<()> {
