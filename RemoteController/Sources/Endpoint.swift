@@ -14,7 +14,7 @@ func remoteEndpoint(address: String, token: String, path: String) throws -> URL 
           bytes[0] == 10 || (bytes[0] == 172 && (16...31).contains(bytes[1])) ||
             (bytes[0] == 192 && bytes[1] == 168) || (bytes[0] == 100 && (64...127).contains(bytes[1])),
           token.count == 64, token.allSatisfy({ $0.isHexDigit && $0.isASCII }),
-          ["/api/apps","/api/status","/api/install"].contains(path),
+          ["/api/apps","/api/status","/api/install","/api/connection"].contains(path),
           let url = URL(string: "http://\(host):49321\(path)") else { throw EndpointError.invalid }
     return url
 }

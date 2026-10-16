@@ -41,7 +41,21 @@ pub async fn pair(ip: Ipv4Addr, bind: Ipv4Addr, app_root: String, trusted_wifi: 
         token: hex::encode(random) }, pairing.to_bytes()))
 }
 
-pub async fn open(config: &Config, bytes: &[u8]) -> Result<(AdapterHandle, RsdHandshake)> {
+pub struct Session {
+    pub handle: AdapterHandle,
+    pub rsd: RsdHandshake,
+    _control: RemotePairingClient<RpPairingSocket<tokio::net::TcpStream>>,
+}
+impl Session {
+    pub async fn verify(&mut self, expected: &str) -> Result<()> {
+        let mut lockdown = LockdownClient::connect_rsd(&mut self.handle, &mut self.rsd).await?;
+        let udid = lockdown.get_value(Some("UniqueDeviceID"), None).await?;
+        ensure!(udid.as_string() == Some(expected), "Device identity mismatch");
+        Ok(())
+    }
+}
+
+pub async fn open(config: &Config, bytes: &[u8]) -> Result<Session> {
     let mut pairing = RpPairingFile::from_bytes(bytes)?;
     let socket = tokio::net::TcpStream::connect((config.ip, 49152)).await?;
     let mut client = RemotePairingClient::new(RpPairingSocket::new(socket), "AltForgeRemote");
@@ -55,14 +69,13 @@ pub async fn open(config: &Config, bytes: &[u8]) -> Result<(AdapterHandle, RsdHa
     let mut adapter = Adapter::new(Box::new(tunnel.into_inner()), info.client_address.parse()?, info.server_address.parse()?);
     adapter.set_mss((info.mtu as usize).saturating_sub(60));
     let mut handle = adapter.to_async_handle();
-    let mut rsd = RsdHandshake::new(handle.connect(info.server_rsd_port).await?).await?;
-    let mut lockdown = LockdownClient::connect_rsd(&mut handle, &mut rsd).await?;
-    let udid = lockdown.get_value(Some("UniqueDeviceID"), None).await?;
-    ensure!(udid.as_string() == Some(config.udid.as_str()), "Device identity mismatch");
-    Ok((handle, rsd))
+    let rsd = RsdHandshake::new(handle.connect(info.server_rsd_port).await?).await?;
+    let mut session = Session { handle, rsd, _control:client };
+    session.verify(&config.udid).await?;
+    Ok(session)
 }
 
-pub async fn checked_open(config: &Config, bytes: &[u8]) -> Result<(AdapterHandle, RsdHandshake)> {
+pub async fn checked_open(config: &Config, bytes: &[u8]) -> Result<Session> {
     tokio::time::timeout(Duration::from_secs(30), open(config, bytes)).await
         .context("VPN connection timed out")?
 }

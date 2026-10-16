@@ -1,4 +1,6 @@
 mod device;
+mod bridge;
+mod ipc;
 mod portal;
 use anyhow::{Context, Result, ensure};
 use serde::{Deserialize, Serialize};
@@ -84,25 +86,25 @@ async fn run() -> Result<()> {
             println!("Registration saved locally. Next: connect both devices to your VPN, then run probe.");
         }
         Some("probe") if args.len() == 2 => {
-            let (config, pairing) = load()?;
-            device::checked_open(&config, &pairing).await?;
+            let (config, _) = load()?;
+            ipc::call(&config, ipc::Request::Probe).await?;
             // Called from the GUI process without a console: success is exit 0.
         }
         Some("install") if args.len() == 4 => {
-            let (config, pairing) = load()?;
+            let (config, _) = load()?;
             ensure!(config.udid == args[3], "Signing target does not match registration");
             let path = PathBuf::from(&args[2]);
             // Called only by native signer. Accept the signed .app directory,
             // never arbitrary uploaded packages from the portal.
             ensure!(path.is_dir() && path.extension().is_some_and(|e| e == "app"), "Expected signed app bundle");
-            let (mut handle, mut rsd) = device::checked_open(&config, &pairing).await?;
-            tokio::time::timeout(Duration::from_secs(900),
-                idevice::utils::installation::install_package_rsd(&mut handle, &mut rsd, &path, None)).await??;
+            ipc::call(&config, ipc::Request::Install {app:args[2].clone(),udid:args[3].clone()}).await?;
             // Only a completed InstallationProxy operation yields exit 0.
         }
         Some("serve") if args.len() == 2 => {
-            let (config, _) = load()?;
-            portal::serve(config).await?;
+            let (config, pairing) = load()?;
+            let bridge = bridge::Bridge::new(config.clone(),pairing);
+            bridge.start();
+            tokio::try_join!(portal::serve(config.clone(),bridge.clone()),ipc::serve(config,bridge))?;
         }
         Some("connection") if args.len() == 2 => {
             let (config, _) = load()?;

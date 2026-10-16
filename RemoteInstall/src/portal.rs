@@ -8,7 +8,7 @@ use subtle::ConstantTimeEq;
 use tokio::sync::Mutex;
 
 #[derive(Clone)]
-struct App { config: Config, root: PathBuf, native: PathBuf, job: Arc<Mutex<Job>> }
+struct App { config: Config, root: PathBuf, native: PathBuf, job: Arc<Mutex<Job>>, bridge:Arc<crate::bridge::Bridge> }
 #[derive(Clone, Serialize, Default)]
 struct Job { id: u64, state: String }
 #[derive(Serialize)]
@@ -49,6 +49,10 @@ async fn apps(State(app): State<App>) -> Result<Json<Vec<Entry>>, StatusCode> {
     list.sort_by(|a,b| a.name.cmp(&b.name));
     Ok(Json(list))
 }
+async fn connection(State(app): State<App>) -> Json<serde_json::Value> {
+    let connected = app.bridge.connected();
+    Json(serde_json::json!({"connected":connected,"state":if connected {"connected"} else {"waiting-for-wifi"}}))
+}
 async fn status(State(app): State<App>) -> Json<Job> { Json(app.job.lock().await.clone()) }
 async fn install(State(app): State<App>, headers: HeaderMap, Json(request): Json<Install>) -> Result<Json<Job>, StatusCode> {
     let path = allowed_file(&app.root, &request.id).map_err(|_| StatusCode::BAD_REQUEST)?;
@@ -59,6 +63,7 @@ async fn install(State(app): State<App>, headers: HeaderMap, Json(request): Json
     let mut job = app.job.lock().await;
     if job.id == key { return Ok(Json(job.clone())); }
     if matches!(job.state.as_str(), "queued" | "installing" | "awaiting-apple-id" | "unknown") { return Err(StatusCode::CONFLICT); }
+    if !app.bridge.connected() { return Err(StatusCode::SERVICE_UNAVAILABLE); }
     *job = Job { id: key, state: "queued".into() };
     let accepted = job.clone();
     drop(job);
@@ -93,16 +98,16 @@ async fn run_install(app: &App, path: PathBuf) -> Result<String> {
     Ok("unknown".into())
 }
 fn router(app: App) -> Router {
-    Router::new().route("/api/apps", get(apps)).route("/api/status", get(status))
+    Router::new().route("/api/apps", get(apps)).route("/api/status", get(status)).route("/api/connection",get(connection))
         .route("/api/install", post(install)).layer(DefaultBodyLimit::max(2048))
         .layer(middleware::from_fn_with_state(app.clone(), authorize)).with_state(app)
 }
-pub async fn serve(config: Config) -> Result<()> {
+pub async fn serve(config: Config,bridge:Arc<crate::bridge::Bridge>) -> Result<()> {
     let native = std::env::current_exe()?.parent().unwrap().join("AltServer.exe");
     ensure!(native.is_file(), "Put worker next to modified AltServer.exe");
     let root = std::fs::canonicalize(&config.app_root)?;
     let listener = tokio::net::TcpListener::bind((config.bind, 49321)).await?;
-    let app = App { config, root, native, job: Arc::new(Mutex::new(Job::default())) };
+    let app = App { config, root, native, job: Arc::new(Mutex::new(Job::default())), bridge };
     println!("Remote controller is listening on the configured private VPN interface only.");
     axum::serve(listener, router(app)).await?;
     Ok(())
@@ -114,7 +119,8 @@ mod tests {
     use axum::body::Body;
     use tower::ServiceExt;
     fn fixture(root: &Path) -> App {
-        App { config: Config {ip:"10.77.0.2".parse().unwrap(),bind:"10.77.0.1".parse().unwrap(), udid:"synthetic".into(),name:"fixture".into(),version:"26.6.1".into(), device_type:2, app_root:root.to_string_lossy().into(),token:"a".repeat(64)}, root: std::fs::canonicalize(root).unwrap(),native:PathBuf::from("missing"),job:Arc::new(Mutex::new(Job::default())) }
+        let config = Config {ip:"10.77.0.2".parse().unwrap(),bind:"10.77.0.1".parse().unwrap(), udid:"synthetic".into(),name:"fixture".into(),version:"26.6.1".into(), device_type:2, app_root:root.to_string_lossy().into(),token:"a".repeat(64)};
+        App { bridge:crate::bridge::Bridge::new(config.clone(),vec![]), config, root: std::fs::canonicalize(root).unwrap(),native:PathBuf::from("missing"),job:Arc::new(Mutex::new(Job::default())) }
     }
     #[test]
     fn traversal_and_wrong_extension_rejected() {
@@ -150,5 +156,16 @@ mod tests {
                 .header("X-Request-ID",key.to_string()).body(Body::from(r#"{"id":"ok.ipa"}"#)).unwrap()).await.unwrap();
             assert_eq!(res.status(),expected);
         }
+    }
+    #[tokio::test]
+    async fn disconnected_phone_rejected_before_native_job() {
+        let temp = tempfile::tempdir().unwrap();
+        let app = fixture(temp.path());
+        std::fs::write(app.root.join("ok.ipa"),b"fixture").unwrap();
+        let res = router(app.clone()).oneshot(Request::builder().method("POST").uri("/api/install")
+            .header("Authorization",format!("Bearer {}",app.config.token)).header("Content-Type","application/json")
+            .header("X-Request-ID","12").body(Body::from(r#"{"id":"ok.ipa"}"#)).unwrap()).await.unwrap();
+        assert_eq!(res.status(),StatusCode::SERVICE_UNAVAILABLE);
+        assert_eq!(app.job.lock().await.id,0);
     }
 }

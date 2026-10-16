@@ -2,7 +2,7 @@
 
 PCとiPhoneを同じTailscaleなどのVPNへ接続し、iPhoneのAltForge RemoteでPCにあるIPAを選びます。PCで署名し、登録したiPhoneへVPN経由で直接転送します。受信用アプリにApple IDを入力する必要はありません。
 
-試作版です。現在の都度接続する実装では、携帯回線のみの状態から接続を開始できません。Wi-Fiで開始した接続を維持する方式への対応を検討しています。ビルド成功と、モバイル通信での実機インストール成功は別々に確認します。実機確認が終わるまでは携帯回線で動作確認済みとは扱いません。
+試作版です。Wi-Fiで開始した認証済み接続をPCの常駐処理が保持し、携帯回線へ切り替えた後も使う設計です。携帯回線のみの状態からの新規接続には対応していません。接続が切れた場合、iPhoneをどこかのWi-Fiへ一度つなぐ必要があります。ビルド成功と、モバイル通信での実機インストール成功は別々に確認します。実機確認が終わるまでは携帯回線で動作確認済みとは扱いません。
 
 ## 初回設定（自宅で）
 
@@ -10,7 +10,7 @@ PCとiPhoneを同じTailscaleなどのVPNへ接続し、iPhoneのAltForge Remote
 2. リモート対応の改造版AltServer.exeとaltforge-remote.exeを同じappフォルダーに置きます。通常版AltServerと以前の改造版は終了してから、本試作版を起動してください。
 3. iPhoneの開発者モードを有効にし、USBでPCを信頼します。端末登録時だけ、USBに接続するiPhoneを1台にしてください。
 4. Setup-Remote.cmdをダブルクリックします。TailscaleでオンラインのiPhoneが1台ならアドレスを自動取得します。複数台やWireGuardの場合は、iPhoneとPCのVPN IPv4アドレス、appフォルダーを指定します。ペアリング情報はWindowsユーザー専用のフォルダーに暗号化して保存します。
-5. 両方のVPNをオンにしてTest-Remote.cmdをダブルクリックします。登録したiPhoneの照合に成功してから先へ進みます。
+5. iPhoneをWi-Fiへ接続し、両方のVPNをオンにしてTest-Remote.cmdをダブルクリックします。PCの常駐処理を起動し、認証済み接続を保持します。登録したiPhoneの照合に成功してから先へ進みます。
 6. AltForgeRemote-unsigned.ipaを、既存の右クリックメニューから同じiPhoneへインストールします。初回のApple ID登録・追加認証はPCで済ませてください。無料アカウントのアプリ枠を1つ使用します。
 7. Show-Connection-QR.cmdをダブルクリックしてQRコードをPCに表示し、iPhoneのカメラでQRコードを読み取ります。またはiphone-connection.jsonをiPhoneアプリの「設定ファイルを読み込む」で読み込みます。手入力する場合はPCのVPNアドレスと接続キーを入力します。このファイルは秘密情報なので公開・GitHubへの送信はしないでください。設定後はQRコードと設定ファイルを削除してください。
 8. IPAを右クリックし「AltForge: 外出先のiPhone用に用意」で一覧に追加します。または`%LOCALAPPDATA%\AltServerDirectIPA\Remote\ApprovedIPAs`へ許可するIPAだけをコピーします。同名ファイルは自動で上書きしません。サブフォルダーやリンクは対象外です。
@@ -20,7 +20,7 @@ PCとiPhoneを同じTailscaleなどのVPNへ接続し、iPhoneのAltForge Remote
 
 ## 外での操作
 
-現段階はWi-Fiに接続した状態で検証します。携帯回線のみの状態での新規接続には対応していません。VPNを接続してAltForge Remoteを開きます。「接続・状態を確認」を押してから、アプリの「インストール」を押します。完了表示後、ホーム画面でアプリを開いて確認してください。通信が切れた場合は再インストールを連打せず、先に状態を確認します。
+出発前にiPhoneをWi-FiとVPNへ接続し、Test-Remote.cmdで接続成功を確認します。PCとVPNの接続を保ったままiPhoneをモバイル通信へ切り替え、AltForge Remoteを開きます。端末への接続が切れた場合はインストールボタンが無効になります。どこかのWi-Fiへ一度つなぎ、再接続を確認してください。PCと同じWi-Fiである必要はありません。「接続・状態を確認」を押してから、アプリの「インストール」を押します。完了表示後、ホーム画面でアプリを開いて確認してください。通信が切れた場合は再インストールを連打せず、先に状態を確認します。
 
 ## 接続できない場合
 
@@ -38,6 +38,8 @@ VPN自体の接続と、iPhoneのインストール用サービスへの接続�
 
 ## 開発と検証
 
-RemoteInstallはWindows用Rustワーカー、RemoteControllerはSwiftUIアプリです。`.github/workflows/remote-install.yml`がWindowsの認証・入力検証・DPAPIテストとビルド、macOS + Xcodeによる未署名IPA生成を行います。改造版本体は既存のdirect-ipa.ymlでビルドします。IPA入力、認証情報、ペアリング情報はCIへ渡しません。
+RemoteInstallはWindows用Rustワーカー、RemoteControllerはSwiftUIアプリです。`.github/workflows/remote-install.yml`がWindowsの認証・入力検証・DPAPI・ローカルIPC相互認証テストとビルド、macOS + Xcodeによる未署名IPA生成を行います。改造版本体は既存のdirect-ipa.ymlでビルドします。IPA入力、認証情報、ペアリング情報はCIへ渡しません。
 
 端末通信にはMITライセンスの[jkcoxson/idevice](https://github.com/jkcoxson/idevice)をコミット固定で使用します。端末とのTLS-PSKにはOpenSSLを使用し、TLSのFinished検証を含む認証処理をライブラリに任せます。
+
+接続維持方式の参考: [iOS OTAの接続条件](https://github.com/zjz-connect/ios-ota)。このプロジェクトでの携帯回線への切り替えは実機未確認です。最初に端末のペアリング登録が必要です。USBの代わりに既に信頼済みの同じWi-Fiで試す場合は、Setup-Remote.ps1のUseTrustedWiFiを指定できます（未確認）。

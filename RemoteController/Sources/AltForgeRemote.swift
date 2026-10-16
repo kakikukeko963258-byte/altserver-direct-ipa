@@ -24,6 +24,7 @@ private enum TokenStore {
 private enum ClientError: Error { case address, storage, rejected, response }
 private struct AppEntry: Decodable, Identifiable { let id: String; let name: String }
 private struct InstallJob: Decodable { let id: UInt64; let state: String }
+private struct BridgeState: Decodable { let connected: Bool; let state: String }
 private struct ConnectionFile: Decodable { let url: String; let token: String }
 
 // No redirects: an Authorization header must never follow another host.
@@ -39,6 +40,8 @@ private final class Client: ObservableObject {
     @Published var status = "VPNを接続してから、接続設定を登録してください。"
     @Published var busy = false
     @Published var working = false
+    @Published var bridgeConnected = false
+    @Published var pcConnected = false
     private let session = URLSession(configuration: .ephemeral, delegate: SessionDelegate(), delegateQueue: nil)
     private func endpoint(_ path: String) throws -> URL {
         try remoteEndpoint(address: address, token: token, path: path)
@@ -65,13 +68,17 @@ private final class Client: ObservableObject {
             try TokenStore.write(token)
             UserDefaults.standard.set(address, forKey: "server")
             apps = try await request("/api/apps")
+            let bridge: BridgeState = try await request("/api/connection")
+            bridgeConnected = bridge.connected; pcConnected = true
             let job: InstallJob = try await request("/api/status")
             show(job)
-            if job.id == 0 { status = "PCに接続しました。インストールするアプリを選んでください。" }
-        } catch { status = "接続できません。両方のVPN、PCの起動、接続設定を確認してください。" }
+            if job.id == 0 {
+                status = bridge.connected ? "インストール用の接続ができました。接続を保ったままお使いください。" : "PCには接続しました。iPhoneを一度Wi-Fiへつなぎ、状態を確認してください。"
+            }
+        } catch { bridgeConnected = false; pcConnected = false; status = "接続できません。両方のVPN、PCの起動、接続設定を確認してください。" }
     }
     func install(_ app: AppEntry) async {
-        guard !busy && !working else { return }
+        guard !busy && !working && bridgeConnected else { return }
         busy = true; working = true
         defer { working = false }
         do {
@@ -88,10 +95,12 @@ private final class Client: ObservableObject {
     }
     func refresh() async {
         do {
+            let bridge: BridgeState = try await request("/api/connection")
+            bridgeConnected = bridge.connected; pcConnected = true
             let job: InstallJob = try await request("/api/status")
             show(job)
             if busy && job.state != "unknown" { await poll(job.id) }
-        } catch { status = "PCと通信できません。VPN接続を確認してください。" }
+        } catch { bridgeConnected = false; pcConnected = false; status = "PCと通信できません。VPN接続を確認してください。" }
     }
     private func poll(_ id: UInt64) async {
         for _ in 0..<900 {
@@ -101,7 +110,10 @@ private final class Client: ObservableObject {
                 let job: InstallJob = try await request("/api/status")
                 guard job.id == id else { status = "別の処理が開始されています。状態を再確認してください。"; return }
                 show(job)
-                if job.state == "unknown" { return }
+                if !busy || job.state == "unknown" {
+                    if let bridge: BridgeState = try? await request("/api/connection") { bridgeConnected = bridge.connected }
+                    return
+                }
             } catch { status = "通信が途切れました。状態確認から結果を確認してください。"; return }
         }
     }
@@ -151,16 +163,19 @@ struct AltForgeRemoteApp: App {
                         Button("設定ファイルを読み込む") { importing = true }
                         Button("接続・状態を確認") { Task { await client.connect(); await client.refresh() } }.disabled(client.working)
                     }
-                    Section("状態") { Text(client.status) }
+                    Section("状態") {
+                        Label(!client.pcConnected ? "PCへの接続は未確認です" : (client.bridgeConnected ? "端末への接続を維持しています" : "端末との接続はWi-Fi待ちです"),systemImage:client.bridgeConnected ? "link" : "wifi.slash")
+                        Text(client.status)
+                    }
                     Section("PCで許可したアプリ") {
                         if client.apps.isEmpty { Text("PCの指定フォルダーにIPAを置き、接続を確認してください。").foregroundStyle(.secondary) }
                         ForEach(client.apps) { app in
                             Button { Task { await client.install(app) } } label: {
                                 HStack { Text(app.name).lineLimit(2); Spacer(); Text("インストール") }
-                            }.disabled(client.busy || client.working)
+                            }.disabled(client.busy || client.working || !client.bridgeConnected)
                         }
                     }
-                    Section { Text("PCを起動したままにし、PCとiPhoneを同じVPNに接続してください。Apple IDと署名処理はPC側で管理します。") }
+                    Section { Text("出発前にWi-FiとVPNで接続を開始してください。携帯回線へ切り替えた後も、PCとVPNの接続を保ちます。接続が切れた場合は、どこかのWi-Fiへ一度つなぎ直してください。Apple IDと署名はPC側で管理します。") }
                 }
                 .navigationTitle("AltForge Remote")
                 .onOpenURL { client.importQRCode($0) }

@@ -26,7 +26,7 @@ jobs:
           cache-on-failure: true
       - name: Resolve dependencies
         shell: pwsh
-        run: cargo generate-lockfile
+        run: cargo metadata --locked --no-deps --format-version 1 > $null
       - name: Test authenticated portal and secret storage
         shell: pwsh
         run: cargo test --release --locked
