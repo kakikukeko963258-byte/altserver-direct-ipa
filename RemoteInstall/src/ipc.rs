@@ -83,8 +83,10 @@ pub async fn call(config:&Config,request:Request) -> Result<()> {
 #[cfg(windows)]
 pub async fn serve(config:Config,bridge:std::sync::Arc<crate::bridge::Bridge>) -> Result<()> {
     use tokio::net::windows::named_pipe::ServerOptions;
-    let mut pipe = ServerOptions::new().first_pipe_instance(true).max_instances(1).reject_remote_clients(true).create(name(&config))?;
     loop {
+        // A disconnected Tokio handle may retain readiness from the previous
+        // connection. Each client gets a fresh OS/IOCP handle and nonce stream.
+        let mut pipe = ServerOptions::new().first_pipe_instance(true).max_instances(1).reject_remote_clients(true).create(name(&config))?;
         pipe.connect().await?;
         let authenticated = tokio::time::timeout(Duration::from_secs(5),authenticate_server(&mut pipe,config.token.as_bytes())).await;
         if matches!(authenticated,Ok(Ok(()))) {
@@ -154,20 +156,37 @@ mod tests {
         use tokio::net::windows::named_pipe::{ServerOptions,ClientOptions};
         let mut random = [0u8;16]; openssl::rand::rand_bytes(&mut random).unwrap();
         let name = format!(r"\\.\pipe\AltForgeRemoteIPC-Test-{}",hex::encode(random));
-        let mut server = ServerOptions::new().first_pipe_instance(true).reject_remote_clients(true).create(&name).unwrap();
+        let first = ServerOptions::new().first_pipe_instance(true).max_instances(1).reject_remote_clients(true).create(&name).unwrap();
+        let server_name = name.clone();
         let task = tokio::spawn(async move {
-            server.connect().await.unwrap();
-            authenticate_server(&mut server,b"synthetic-test-key").await.unwrap();
-            assert!(matches!(receive::<_,Request>(&mut server).await.unwrap(),Request::Probe));
-            send(&mut server,&Reply {success:true}).await.unwrap();
-            // Keep the pipe alive until the client has consumed the response.
-            let mut ack = [0u8;1]; server.read_exact(&mut ack).await.unwrap();
+            let mut next = Some(first);
+            for _ in 0..3 {
+                let mut server = match next.take() {
+                    Some(first) => first,
+                    None => ServerOptions::new().first_pipe_instance(true).max_instances(1).reject_remote_clients(true).create(&server_name).unwrap(),
+                };
+                server.connect().await.unwrap();
+                authenticate_server(&mut server,b"synthetic-test-key").await.unwrap();
+                assert!(matches!(receive::<_,Request>(&mut server).await.unwrap(),Request::Probe));
+                send(&mut server,&Reply {success:true}).await.unwrap();
+                let mut ack = [0u8;1]; server.read_exact(&mut ack).await.unwrap();
+                server.disconnect().unwrap();
+            }
         });
-        let mut client = ClientOptions::new().open(&name).unwrap();
-        authenticate_client(&mut client,b"synthetic-test-key").await.unwrap();
-        send(&mut client,&Request::Probe).await.unwrap();
-        assert!(receive::<_,Reply>(&mut client).await.unwrap().success);
-        client.write_all(&[1]).await.unwrap();
+        for _ in 0..3 {
+            let mut client = tokio::time::timeout(Duration::from_secs(5),async {
+                loop {
+                    if let Ok(client) = ClientOptions::new().open(&name) { break client; }
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            }).await.unwrap();
+            authenticate_client(&mut client,b"synthetic-test-key").await.unwrap();
+            send(&mut client,&Request::Probe).await.unwrap();
+            assert!(receive::<_,Reply>(&mut client).await.unwrap().success);
+            client.write_all(&[1]).await.unwrap();
+            // Allow the server to receive the acknowledgement before closing.
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
         task.await.unwrap();
     }
 }
