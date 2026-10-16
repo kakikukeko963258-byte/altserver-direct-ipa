@@ -2,7 +2,7 @@
 
 PCとiPhoneを同じTailscaleなどのVPNへ接続し、iPhoneのAltForge RemoteでPCにあるIPAを選びます。PCで署名し、登録したiPhoneへVPN経由で直接転送します。受信用アプリにApple IDを入力する必要はありません。
 
-試作版です。Wi-Fiで開始した認証済み接続をPCの常駐処理が保持し、携帯回線へ切り替えた後も使う設計です。携帯回線のみの状態からの新規接続には対応していません。接続が切れた場合、iPhoneをどこかのWi-Fiへ一度つなぐ必要があります。ビルド成功と、モバイル通信での実機インストール成功は別々に確認します。実機確認が終わるまでは携帯回線で動作確認済みとは扱いません。
+試作版です。Wi-Fiで開始した認証済み接続をPCの常駐処理が保持し、携帯回線へ切り替えた後も使います。2026-10-16、登録したiPhoneでWi-Fiから携帯回線へ切り替え、操作アプリから「風車」をインストールし、アプリを開けることまで確認しました。すべての端末・回線での動作を保証するものではありません。携帯回線のみの状態からの新規接続には対応していません。接続が切れた場合、iPhoneをどこかのWi-Fiへ一度つなぐ必要があります。
 
 ## 初回設定（自宅で）
 
@@ -42,4 +42,4 @@ RemoteInstallはWindows用Rustワーカー、RemoteControllerはSwiftUIアプリ
 
 端末通信にはMITライセンスの[jkcoxson/idevice](https://github.com/jkcoxson/idevice)をコミット固定で使用します。端末とのTLS-PSKにはOpenSSLを使用し、TLSのFinished検証を含む認証処理をライブラリに任せます。
 
-接続維持方式の参考: [iOS OTAの接続条件](https://github.com/zjz-connect/ios-ota)。このプロジェクトでの携帯回線への切り替えは実機未確認です。最初に端末のペアリング登録が必要です。USBの代わりに既に信頼済みの同じWi-Fiで試す場合は、Setup-Remote.ps1のUseTrustedWiFiを指定できます（未確認）。
+接続維持方式の参考: [iOS OTAの接続条件](https://github.com/zjz-connect/ios-ota)。最初に端末のペアリング登録が必要です。USBの代わりに既に信頼済みの同じWi-Fiで試す場合は、Setup-Remote.ps1のUseTrustedWiFiを指定できます（この登録方式は未確認）。接続喪失後の再取得や、端末によるインストール拒否後の維持は、追加の実機確認が必要です。

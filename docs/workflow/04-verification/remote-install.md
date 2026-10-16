@@ -1,6 +1,6 @@
 # Remote installation verification
 
-Implementation is a preview. Physical acceptance is pending; do not describe cellular installation as verified.
+Implementation is a preview. Basic cellular installation was physically verified on the intended phone on 2026-10-16. Recovery/failure acceptance remains pending.
 
 ## Automated evidence
 
@@ -14,7 +14,11 @@ Implementation is a preview. Physical acceptance is pending; do not describe cel
 - Tailscale on Windows and the intended iPhone: both online, ping succeeded.
 - Cellular-only fresh TCP probes: ports 49152 and 62078 not reachable. This is consistent with the acquisition boundary; it is not a successful device-service connection.
 - A native global state file reported success during an earlier controller installation attempt. Its target was not correlated to the outdoor iPhone, so it does not establish that the controller was installed on that phone.
-- No RPPairing registration, authenticated tunnel, Wi-Fi-to-cellular transition, or remote installation has been verified on the intended iPhone.
+- Home test 2026-10-16: exactly one intended USB phone was registered. The first VPN identity probe succeeded; repeated IPC probes exposed a Windows pipe reuse failure. The setup ACL failure and IPC lifetime handling were repaired.
+- Worker da3159c, Actions 38882542949: all 11 tests passed, including 20 consecutive real Windows named-pipe sessions. Deployed to the separate preview folder; three consecutive physical identity probes passed.
+- Remote native installation of the approved test IPA over the VPN completed while on Wi-Fi. The user then reported disconnecting USB, turning Wi-Fi off, requesting installation from the iPhone controller, and opening the installed app.
+- The controller API job and the dedicated native state both reported succeeded at 18:48 JST. A post-install identity probe through the existing tunnel succeeded; a fresh TCP probe to the phone VPN port 49152 failed. This supports retained-tunnel operation after roaming rather than fresh cellular acquisition. Windows PnP still showed an Apple phone entry; it was not used as proof that all USB phones were absent.
+- No general compatibility claim: existing-trusted-Wi-Fi registration, intentional session-loss/reacquisition, and policy/app-slot rejection recovery remain unverified.
 
 ## Acceptance when the phone is available
 
