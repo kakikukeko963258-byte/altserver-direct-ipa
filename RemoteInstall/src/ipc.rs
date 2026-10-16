@@ -83,7 +83,9 @@ pub async fn call(config:&Config,request:Request) -> Result<()> {
 #[cfg(windows)]
 fn listener(name: &str, first: bool) -> std::io::Result<tokio::net::windows::named_pipe::NamedPipeServer> {
     tokio::net::windows::named_pipe::ServerOptions::new().first_pipe_instance(first)
-        .max_instances(2).reject_remote_clients(true).create(name)
+        // Closed IOCP instances can remain alive briefly while Windows retires
+        // their pending operations. Only one request is processed at a time.
+        .max_instances(255).reject_remote_clients(true).create(name)
 }
 #[cfg(windows)]
 pub async fn serve(config:Config,bridge:std::sync::Arc<crate::bridge::Bridge>) -> Result<()> {
@@ -169,7 +171,7 @@ mod tests {
         let server_name = name.clone();
         let task = tokio::spawn(async move {
             let mut server = first;
-            for _ in 0..3 {
+            for _ in 0..20 {
                 server.connect().await.unwrap();
                 let next = listener(&server_name,false).unwrap();
                 authenticate_server(&mut server,b"synthetic-test-key").await.unwrap();
@@ -180,7 +182,7 @@ mod tests {
                 server = next;
             }
         });
-        for _ in 0..3 {
+        for _ in 0..20 {
             let mut client = tokio::time::timeout(Duration::from_secs(5),async {
                 loop {
                     if let Ok(client) = ClientOptions::new().open(&name) { break client; }
